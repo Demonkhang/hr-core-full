@@ -1,0 +1,87 @@
+import type React from 'react';
+import { COLORS } from '@/utils/constants';
+
+export const styles: Record<string, React.CSSProperties> = {
+  calendarGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: 2,
+    background: '#e0e6ef',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  headerCell: {
+    background: 'linear-gradient(180deg, #f8faff, #f0f4ff)',
+    padding: '6px 2px',
+    textAlign: 'center',
+    fontWeight: 700,
+    fontSize: 11,
+    color: '#4f46e5',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  cell: {
+    background: COLORS.WHITE,
+    minHeight: 36,
+    padding: '2px 4px',
+    cursor: 'pointer',
+    border: 'none',
+    transition: 'all 0.2s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  emptyCell: {
+    background: '#f8faff',
+    minHeight: 36,
+  },
+  todayCell: {
+    background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
+    boxShadow: 'inset 0 0 0 2px #6366f1',
+  },
+  selectedCell: {
+    background: 'linear-gradient(135deg, #eef2ff, #c7d2fe)',
+    boxShadow: 'inset 0 0 0 2px #8b5cf6',
+  },
+  dayNumber: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#475569',
+  },
+  schedules: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+  },
+  employeeItem: {
+    padding: '8px 4px',
+    borderBottom: '1px solid #e8edf5',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    transition: 'background 0.15s',
+  },
+  tableHeader: {
+    display: 'grid',
+    gridTemplateColumns: '100px 60px 1fr 90px',
+    gap: 4,
+    padding: '6px 8px',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#6366f1',
+    borderBottom: '1px solid #e0e6ef',
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: '0.3px',
+  },
+  tableRow: {
+    display: 'grid',
+    gridTemplateColumns: '100px 60px 1fr 90px',
+    gap: 4,
+    padding: '6px 8px',
+    alignItems: 'center',
+    borderBottom: '1px solid #f0f4ff',
+    transition: 'background 0.15s',
+  },
+};

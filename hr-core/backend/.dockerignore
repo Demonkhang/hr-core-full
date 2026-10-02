@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments (không bao giờ đưa vào image)
+.venv/
+venv/
+env/
+ENV/
+
+# Tests & fixtures (không cần trong image production)
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Tooling / IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Local env & logs
+.env
+.env.*
+*.log

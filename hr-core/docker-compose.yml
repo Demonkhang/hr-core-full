@@ -1,0 +1,59 @@
+services:
+  hr-db:
+    image: postgres:16-alpine
+    container_name: hr-db
+    environment:
+      POSTGRES_DB: mbs_hr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - hr_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  hr-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: hr-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@hr-db:5432/mbs_hr
+      SECRET_KEY: dev-secret-key-at-least-32-characters-long!!
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      JWT_ISSUER: mbs-hr
+      JWT_AUDIENCE: mbs-hr-api
+      FRONTEND_URL: http://localhost:5173
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      hr-db:
+        condition: service_healthy
+
+  hr-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: hr-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_API_PROXY: http://hr-backend:8000
+    depends_on:
+      - hr-backend
+
+volumes:
+  hr_db_data:

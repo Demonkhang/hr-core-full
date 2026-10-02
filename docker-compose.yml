@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # HR CORE SYSTEM
+  # ==========================================
+  hr-db:
+    image: postgres:16-alpine
+    container_name: hr-db
+    environment:
+      POSTGRES_DB: mbs_hr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - hr_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  hr-backend:
+    build:
+      context: ./hr-core/backend
+      dockerfile: Dockerfile.dev
+    container_name: hr-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@hr-db:5432/mbs_hr
+      SECRET_KEY: mbs-shared-secret-key-change-in-production-32chars!!
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      JWT_ISSUER: mbs-hr
+      JWT_AUDIENCE: mbs-hr-api
+      FRONTEND_URL: http://localhost:5173
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./hr-core/backend/app:/app/app
+    depends_on:
+      hr-db:
+        condition: service_healthy
+
+  hr-frontend:
+    build:
+      context: ./hr-core/frontend
+      dockerfile: Dockerfile.dev
+    container_name: hr-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./hr-core/frontend/src:/app/src
+      - ./hr-core/frontend/index.html:/app/index.html
+      - ./hr-core/frontend/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_API_PROXY: http://hr-backend:8000
+    depends_on:
+      - hr-backend
+
+  # ==========================================
+  # CALENDAR MANAGEMENT SYSTEM
+  # ==========================================
+  calendar-db:
+    image: postgres:16-alpine
+    container_name: calendar-db
+    environment:
+      POSTGRES_DB: mbs_calendar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - calendar_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  calendar-backend:
+    build:
+      context: ./calendar-mgmt/backend
+      dockerfile: Dockerfile.dev
+    container_name: calendar-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@calendar-db:5432/mbs_calendar
+      SECRET_KEY: mbs-shared-secret-key-change-in-production-32chars!!
+      HR_CORE_BASE_URL: http://hr-backend:8000
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      JWT_ISSUER: mbs-hr
+      JWT_AUDIENCE: mbs-hr-api
+      FRONTEND_URL: http://localhost:5174
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./calendar-mgmt/backend/app:/app/app
+    depends_on:
+      calendar-db:
+        condition: service_healthy
+      hr-backend:
+        condition: service_started
+
+  calendar-frontend:
+    build:
+      context: ./calendar-mgmt/frontend
+      dockerfile: Dockerfile.dev
+    container_name: calendar-frontend
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./calendar-mgmt/frontend/src:/app/src
+      - ./calendar-mgmt/frontend/index.html:/app/index.html
+      - ./calendar-mgmt/frontend/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_API_PROXY: http://calendar-backend:8000
+      VITE_HR_API_PROXY: http://hr-backend:8000
+    depends_on:
+      - calendar-backend
+
+volumes:
+  hr_db_data:
+  calendar_db_data:

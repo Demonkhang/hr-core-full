@@ -1,0 +1,43 @@
+/* ===== Bảng inline-edit ===== */
+.table-form-item {
+  margin-bottom: 0 !important;
+}
+.table-form-item .ant-form-item-explain-error {
+  display: none;
+}
+.full-width {
+  width: 100%;
+}
+
+/* ===== Page header ===== */
+.page-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+/* ===== Card spacing ===== */
+.card-mb-16 {
+  margin-bottom: 16px;
+}
+
+/* ===== Back / nav button ===== */
+.btn-back {
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+/* ===== Viền bao quanh bảng ===== */
+.ant-table-wrapper {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+}
+
+/* ===== Colour swatch ===== */
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+}
