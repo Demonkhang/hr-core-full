@@ -4,7 +4,8 @@ from datetime import date, datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update, delete
+from app.models.refresh_token import RefreshToken
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.api.deps import get_current_user, RequirePermission, get_current_permissions, get_scope_filter
@@ -317,7 +318,8 @@ async def update_employee(
 @router.delete("/{emp_id}")
 async def delete_employee(
     emp_id: str,
-    body: EmployeeDeactivate,
+    permanent: bool = Query(False),
+    body: Optional[EmployeeDeactivate] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     perms: dict = Depends(RequirePermission('can_manage_employees')),
@@ -331,6 +333,32 @@ async def delete_employee(
         raise ForbiddenError(detail=RESPONSE_MESSAGES["FORBIDDEN"])
     if scope_filter["department_id"] and str(emp.department_id) != scope_filter["department_id"]:
         raise ForbiddenError(detail=RESPONSE_MESSAGES["FORBIDDEN"])
+
+    if permanent:
+        await db.execute(
+            update(Department)
+            .where(Department.head_id == emp.id)
+            .values(head_id=None)
+        )
+        user_result = await db.execute(select(User).where(User.employee_id == emp.id))
+        user = user_result.scalar_one_or_none()
+        if user:
+            await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+            await db.delete(user)
+
+        await create_audit_log(
+            db, action="employee.hard_delete", resource_type="employee",
+            resource_id=emp_id, user_id=str(current_user.id),
+            old_values={"full_name": emp.full_name, "employee_code": emp.employee_code},
+            new_values=None, success=True,
+        )
+        await db.delete(emp)
+        await db.flush()
+        return {"message": "Đã xóa vĩnh viễn nhân viên khỏi hệ thống"}
+
+    if not body or not body.status:
+        raise HTTPException(status_code=400, detail="Vui lòng chọn lý do ngưng nhân viên")
+
     old_values = {"is_active": emp.is_active, "status": emp.status}
     emp.is_active = False
     emp.status = body.status

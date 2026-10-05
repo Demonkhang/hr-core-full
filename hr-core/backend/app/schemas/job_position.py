@@ -11,6 +11,7 @@ class JobPositionCreate(BaseModel):
     required_qualification_level: Optional[str] = None
     required_specialty: Optional[str] = None
     max_headcount: int = Field(1, ge=0)
+    workplace_id: Optional[str] = None
 
 
 class JobPositionUpdate(BaseModel):
@@ -21,6 +22,7 @@ class JobPositionUpdate(BaseModel):
     required_qualification_level: Optional[str] = None
     required_specialty: Optional[str] = None
     max_headcount: Optional[int] = Field(None, ge=0)
+    workplace_id: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -33,6 +35,8 @@ class JobPositionResponse(BaseModel):
     required_qualification_level: Optional[str] = None
     required_specialty: Optional[str] = None
     max_headcount: int
+    workplace_id: Optional[str] = None
+    workplace_name: Optional[str] = None
     is_active: bool
     current_headcount: int = 0
     created_at: Optional[datetime] = None
@@ -40,3 +44,4 @@ class JobPositionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

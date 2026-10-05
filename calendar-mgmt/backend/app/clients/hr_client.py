@@ -211,8 +211,47 @@ class HRClient:
             logger.error(f"HR Core unavailable: {e}")
             return None
 
+    async def get_active_salary_config(self, token: str = "") -> Optional[dict]:
+        cache_key = "salary_config:active"
+        cached = self._cache_get(cache_key)
+        if cached:
+            return cached
+        try:
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            resp = await self._client.get(
+                f"{self.base_url}/api/v1/salary-config/public-sector-active",
+                headers=headers,
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                self._cache_set(cache_key, data)
+                return data
+            logger.warning(f"HR active salary config fetch failed: {resp.status_code}")
+            return None
+        except httpx.RequestError as e:
+            logger.error(f"HR Core unavailable: {e}")
+            return None
+
+    async def list_shift_rate_configs(self, token: str = "") -> list[dict]:
+        try:
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            resp = await self._client.get(
+                f"{self.base_url}/api/v1/shift-rate-configs",
+                headers=headers,
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(f"HR shift rate configs fetch failed: {resp.status_code}")
+            return []
+        except httpx.RequestError as e:
+            logger.error(f"HR Core unavailable: {e}")
+            return []
+
     async def close(self):
         await self._client.aclose()
 
 
 hr_client = HRClient(base_url=settings.HR_CORE_BASE_URL)
+

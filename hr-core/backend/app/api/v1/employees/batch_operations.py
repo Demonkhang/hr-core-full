@@ -237,3 +237,72 @@ async def batch_deactivate(
         "success_count": success_count,
         "errors": errors,
     }
+
+
+class BatchHardDeleteRequest(BaseModel):
+    employee_ids: List[str]
+
+
+@router.post("/batch/hard-delete")
+async def batch_hard_delete(
+    body: BatchHardDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RequirePermission('can_manage_employees')),
+):
+    from sqlalchemy import update, delete
+    from app.models.department import Department
+    from app.models.refresh_token import RefreshToken
+
+    success_count = 0
+    errors = []
+    for emp_id in body.employee_ids:
+        try:
+            emp_uuid = UUID(emp_id)
+            result = await db.execute(select(Employee).where(Employee.id == emp_uuid))
+            emp = result.scalar_one_or_none()
+            if not emp:
+                errors.append({"id": emp_id, "reason": "Không tìm thấy"})
+                continue
+
+            await db.execute(
+                update(Department)
+                .where(Department.head_id == emp.id)
+                .values(head_id=None)
+            )
+
+            user_result = await db.execute(select(User).where(User.employee_id == emp.id))
+            user = user_result.scalar_one_or_none()
+            if user:
+                await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+                await db.delete(user)
+
+            await create_audit_log(
+                db, action="employee.hard_delete", resource_type="employee",
+                resource_id=emp_id, user_id=str(current_user.id),
+                old_values={"full_name": emp.full_name, "employee_code": emp.employee_code},
+                new_values=None, success=True,
+            )
+            await db.delete(emp)
+            success_count += 1
+        except Exception as e:
+            logger.exception(f"Lỗi hard delete {emp_id}")
+            errors.append({"id": emp_id, "reason": str(e)[:200]})
+
+    await db.flush()
+
+    await create_audit_log(
+        db, action="employee.batch_hard_delete", resource_type="employee",
+        resource_id=",".join(body.employee_ids), user_id=str(current_user.id),
+        new_values={
+            "total": len(body.employee_ids),
+            "success": success_count,
+            "errors": len(errors),
+        },
+        success=True,
+    )
+
+    return {
+        "message": f"Đã xóa vĩnh viễn {success_count} nhân viên" + (f", {len(errors)} lỗi" if errors else ""),
+        "success_count": success_count,
+        "errors": errors,
+    }

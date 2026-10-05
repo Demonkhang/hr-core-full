@@ -1,5 +1,8 @@
 import apiClient from './apiClient';
-import type { SalaryHistory, SalaryHistoryCreate, BaseSalaryConfig, BaseSalaryConfigCreate, Qualification, QualificationCreate } from '@/types/employeeProcess';
+import type {
+  SalaryHistory, SalaryHistoryCreate, BaseSalaryConfig, BaseSalaryConfigCreate,
+  Qualification, QualificationCreate, ShiftRateConfig, ShiftRateConfigCreate,
+} from '@/types/employeeProcess';
 import { API_ENDPOINTS } from '@/utils/constants';
 
 export const employeeProcessService = {
@@ -62,4 +65,25 @@ export const employeeProcessService = {
   async deleteBaseSalaryConfig(id: string): Promise<void> {
     await apiClient.delete(API_ENDPOINTS.BASE_SALARY_CONFIG_ITEM(id));
   },
+
+  // Shift Rate Configs
+  async getShiftRateConfigs(): Promise<ShiftRateConfig[]> {
+    const res = await apiClient.get('/shift-rate-configs');
+    return res.data;
+  },
+
+  async createShiftRateConfig(data: ShiftRateConfigCreate): Promise<ShiftRateConfig> {
+    const res = await apiClient.post('/shift-rate-configs', data);
+    return res.data;
+  },
+
+  async updateShiftRateConfig(id: string, data: Partial<ShiftRateConfigCreate>): Promise<ShiftRateConfig> {
+    const res = await apiClient.put(`/shift-rate-configs/${id}`, data);
+    return res.data;
+  },
+
+  async deleteShiftRateConfig(id: string): Promise<void> {
+    await apiClient.delete(`/shift-rate-configs/${id}`);
+  },
 };
+

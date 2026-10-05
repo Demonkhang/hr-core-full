@@ -4,6 +4,8 @@ export interface JobPosition {
   code: string;
   description: string | null;
   professional_level: number;
+  workplace_id: string | null;
+  workplace_name: string | null;
   required_qualification_level: string | null;
   required_specialty: string | null;
   max_headcount: number;
@@ -18,7 +20,9 @@ export interface JobPositionCreate {
   code: string;
   description?: string;
   professional_level?: number;
+  workplace_id?: string | null;
   required_qualification_level?: string;
   required_specialty?: string;
   max_headcount?: number;
 }
+

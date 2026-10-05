@@ -13,6 +13,9 @@ class JobPosition(Base, UUIDMixin, TimestampMixin):
     required_qualification_level = Column(String(50), nullable=True)
     required_specialty = Column(String(100), nullable=True)
     max_headcount = Column(Integer, nullable=False, default=1)
+    workplace_id = Column(ForeignKey("workplaces.id"), nullable=True, index=True)
     is_active = Column(Boolean, default=True, index=True)
 
     employees = relationship("Employee", back_populates="job_position")
+    workplace = relationship("Workplace")
+

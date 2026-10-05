@@ -63,3 +63,25 @@ export interface QualificationCreate {
   training_form?: string;
   notes?: string;
 }
+
+export interface ShiftRateConfig {
+  id: string;
+  code: string;
+  name: string;
+  multiplier: number;
+  allowance_amount: number;
+  description?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ShiftRateConfigCreate {
+  code: string;
+  name: string;
+  multiplier?: number;
+  allowance_amount?: number;
+  description?: string;
+  is_active?: boolean;
+}
+

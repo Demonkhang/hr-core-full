@@ -1,5 +1,5 @@
 import { ReactNode, useState, createContext, useContext, useEffect, useMemo, useCallback } from 'react';
-import { Layout, Menu, Typography, Dropdown } from 'antd';
+import { Layout, Menu, Typography, Dropdown, Button, Tooltip } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -15,9 +15,12 @@ import {
   UserOutlined,
   DollarOutlined,
   TableOutlined,
+  SunOutlined,
+  MoonOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useTheme } from '@/context/ThemeContext';
 import { ROUTES, COLORS, BORDER_RADIUS } from '@/utils/constants';
 import { ProfileModal } from '@/components/Common/ProfileModal';
 
@@ -97,10 +100,11 @@ function getDefaultTitle(pathname: string): string {
   return 'HR Core';
 }
 
-/** Layout chính: topbar glass, sidebar menu, và modal thông tin cá nhân */
+/** Layout chính: topbar glass, sidebar menu, theme toggle, và modal thông tin cá nhân */
 export function AppLayout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
@@ -136,19 +140,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <PageTitleCtx.Provider value={ctxValue}>
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: isDark ? '#0f172a' : COLORS.LAYOUT_BG }}>
       <style>{`
-        body { margin: 0; padding: 0; background: ${COLORS.LAYOUT_BG}; }
+        body { margin: 0; padding: 0; background: ${isDark ? '#0f172a' : COLORS.LAYOUT_BG}; color: ${isDark ? '#f8fafc' : '#1e293b'}; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        ::-webkit-scrollbar-thumb { background: ${isDark ? '#475569' : '#cbd5e1'}; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${isDark ? '#64748b' : '#94a3b8'}; }
         .ant-table-wrapper .ant-table { border-radius: 12px; overflow: hidden; }
         .ant-card { transition: box-shadow 0.2s ease, transform 0.2s ease; }
-        .ant-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+        .ant-card:hover { box-shadow: ${isDark ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(0,0,0,0.06)'}; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         .ant-layout-content > * { animation: fadeIn 0.25s ease-out; }
-        .menu-popup-solid, .menu-popup-solid .ant-menu { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        .menu-popup-solid, .menu-popup-solid .ant-menu { background: ${isDark ? '#1e293b' : '#ffffff'}; border-radius: 8px; box-shadow: ${isDark ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(0,0,0,0.08)'}; }
 
         @media print {
           .ant-layout-sider, .app-topbar {
@@ -173,10 +177,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         collapsed={collapsed}
         width={250}
         collapsedWidth={64}
-        theme="light"
+        theme={isDark ? 'dark' : 'light'}
         style={{
-          background: COLORS.SIDEBAR_BG,
-          borderRight: `1px solid ${COLORS.BORDER_LIGHT}`,
+          background: isDark ? '#1e293b' : COLORS.SIDEBAR_BG,
+          borderRight: isDark ? '1px solid #334155' : `1px solid ${COLORS.BORDER_LIGHT}`,
           position: 'sticky',
           top: 0,
           height: '100vh',
@@ -193,13 +197,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
-              borderBottom: `1px solid ${COLORS.BORDER_LIGHT}`,
+              borderBottom: isDark ? '1px solid #334155' : `1px solid ${COLORS.BORDER_LIGHT}`,
               cursor: 'pointer',
               transition: 'background 0.15s',
               userSelect: 'none',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = COLORS.LAYOUT_BG; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? '#334155' : COLORS.LAYOUT_BG; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = COLORS.TRANSPARENT; }}
           >
             <div style={{
@@ -215,7 +219,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <TeamOutlined style={{ fontSize: 16, color: COLORS.WHITE }} />
             </div>
             {!collapsed && (
-              <Typography.Text strong style={{ fontSize: 17, color: '#1e293b', letterSpacing: '0.3px' }}>
+              <Typography.Text strong style={{ fontSize: 17, color: isDark ? '#f8fafc' : '#1e293b', letterSpacing: '0.3px' }}>
                 HR Core
               </Typography.Text>
             )}
@@ -225,6 +229,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div style={{ height: '100%', overflow: 'auto', padding: '8px 0' }}>
               <Menu
                 mode="inline"
+                theme={isDark ? 'dark' : 'light'}
                 selectedKeys={[location.pathname]}
                 openKeys={openKeys}
                 onOpenChange={setOpenKeys}
@@ -239,16 +244,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </Sider>
-      <Layout>
+      <Layout style={{ background: isDark ? '#0f172a' : COLORS.LAYOUT_BG }}>
         <Header className="app-topbar" style={{
           height: 56,
           lineHeight: '56px',
           padding: '0 20px',
-          background: 'rgba(255,255,255,0.72)',
+          background: isDark ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255,255,255,0.72)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-          borderBottom: '1px solid rgba(0,0,0,0.05)',
+          boxShadow: isDark ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.04)',
+          borderBottom: isDark ? '1px solid #334155' : '1px solid rgba(0,0,0,0.05)',
           position: 'sticky',
           top: 0,
           zIndex: 19,
@@ -262,7 +267,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               onClick={() => setCollapsed(!collapsed)}
               style={{
                 fontSize: 18,
-                color: COLORS.TEXT_PRIMARY,
+                color: isDark ? '#f8fafc' : COLORS.TEXT_PRIMARY,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -273,7 +278,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </span>
             <Typography.Text strong style={{
               fontSize: 16,
-              color: COLORS.TEXT_PRIMARY,
+              color: isDark ? '#f8fafc' : COLORS.TEXT_PRIMARY,
               lineHeight: '56px',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -283,63 +288,87 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </Typography.Text>
           </div>
 
-          <Dropdown
-            trigger={['click']}
-            placement="bottomRight"
-            menu={{
-              items: [
-                { key: 'profile', icon: <UserOutlined />, label: 'Thông tin cá nhân' },
-                { type: 'divider' },
-                { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'profile') setProfileOpen(true);
-                if (key === 'logout') handleLogout();
-              },
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              padding: '0 8px',
-              height: 40,
-              borderRadius: 8,
-              transition: 'background 0.15s',
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = COLORS.LAYOUT_BG; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = COLORS.TRANSPARENT; }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Tooltip title={isDark ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}>
+              <Button
+                type="text"
+                shape="circle"
+                icon={
+                  isDark ? (
+                    <SunOutlined style={{ color: '#fbbf24', fontSize: 18 }} />
+                  ) : (
+                    <MoonOutlined style={{ color: '#64748b', fontSize: 18 }} />
+                  )
+                }
+                onClick={toggleTheme}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 36,
+                  height: 36,
+                }}
+              />
+            </Tooltip>
+
+            <Dropdown
+              trigger={['click']}
+              placement="bottomRight"
+              menu={{
+                items: [
+                  { key: 'profile', icon: <UserOutlined />, label: 'Thông tin cá nhân' },
+                  { type: 'divider' },
+                  { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
+                ],
+                onClick: ({ key }) => {
+                  if (key === 'profile') setProfileOpen(true);
+                  if (key === 'logout') handleLogout();
+                },
+              }}
             >
               <div style={{
-                width: 30,
-                height: 30,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #a78bfa, #818cf8)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: COLORS.WHITE,
-                fontSize: 12,
-                fontWeight: 600,
-                flexShrink: 0,
-              }}>
-                {(user?.full_name || 'U').charAt(0).toUpperCase()}
+                gap: 8,
+                cursor: 'pointer',
+                padding: '0 8px',
+                height: 40,
+                borderRadius: 8,
+                transition: 'background 0.15s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? '#334155' : COLORS.LAYOUT_BG; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = COLORS.TRANSPARENT; }}
+              >
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #a78bfa, #818cf8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: COLORS.WHITE,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}>
+                  {(user?.full_name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <Typography.Text style={{
+                  color: isDark ? '#f8fafc' : COLORS.TEXT_PRIMARY,
+                  fontWeight: 500,
+                  fontSize: 13,
+                  lineHeight: 1.2,
+                  maxWidth: 140,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {user?.full_name || 'Người dùng'}
+                </Typography.Text>
               </div>
-              <Typography.Text style={{
-                color: COLORS.TEXT_PRIMARY,
-                fontWeight: 500,
-                fontSize: 13,
-                lineHeight: 1.2,
-                maxWidth: 140,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                {user?.full_name || 'Người dùng'}
-              </Typography.Text>
-            </div>
-          </Dropdown>
+            </Dropdown>
+          </div>
         </Header>
         <Content style={{ margin: 24, minHeight: 280 }}>
           {children}
@@ -355,3 +384,4 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </PageTitleCtx.Provider>
   );
 }
+

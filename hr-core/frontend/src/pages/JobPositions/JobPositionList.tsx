@@ -1,17 +1,21 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Table, Button, Input, InputNumber, Select, Tag, message, Space, Popconfirm, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, WarningOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, WarningOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { jobPositionService } from '@/services/jobPositionService';
+import { workplaceService } from '@/services/workplaceService';
 import type { JobPosition } from '@/types/jobPosition';
+import type { Workplace } from '@/types/workplace';
 import { PermGate } from '@/components/Common/PermGate';
 import { ERROR_MESSAGES, LABELS, FIELD_NAMES, PERMISSIONS, QUALIFICATION_LEVELS, PROFESSIONAL_LEVELS } from '@/utils/constants';
 import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut';
+import { JobPositionImportModal } from '@/components/JobPositions/JobPositionImportModal';
 import '@/styles/table.css';
 
 interface EditData {
   name: string;
   code: string;
   professional_level: number;
+  workplace_id?: string;
   required_qualification_level?: string;
   required_specialty?: string;
   max_headcount: number;
@@ -19,24 +23,30 @@ interface EditData {
 }
 
 const defaultEdit: EditData = {
-  name: '', code: '', professional_level: 1, required_qualification_level: undefined,
+  name: '', code: '', professional_level: 1, workplace_id: undefined, required_qualification_level: undefined,
   required_specialty: '', max_headcount: 1, description: '',
 };
 
 /** Trang quản lý vị trí việc làm (công việc chuyên môn của cơ quan) */
 export function JobPositionList() {
   const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editData, setEditData] = useState<EditData>({ ...defaultEdit });
 
-  /** Tải danh sách vị trí việc làm */
+  /** Tải danh sách vị trí việc làm và nơi làm việc */
   const fetchData = async () => {
     setLoading(true);
     try {
-      const data = await jobPositionService.list(false);
-      setJobPositions(data);
+      const [jps, wps] = await Promise.all([
+        jobPositionService.list(false),
+        workplaceService.list(),
+      ]);
+      setJobPositions(jps);
+      setWorkplaces(wps);
     } catch {
       message.error(ERROR_MESSAGES.LOAD_FAILED);
     } finally {
@@ -45,6 +55,24 @@ export function JobPositionList() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  /** Tải file Excel danh sách vị trí việc làm */
+  const handleExport = async () => {
+    try {
+      const blob = await jobPositionService.export(false);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `vitrivieclam_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      message.success('Xuất file Excel thành công');
+    } catch {
+      message.error('Không thể xuất file Excel');
+    }
+  };
 
   /** Mở form thêm vị trí việc làm mới */
   const openAdd = useCallback(() => {
@@ -105,6 +133,7 @@ export function JobPositionList() {
       name: record.name,
       code: record.code,
       professional_level: record.professional_level,
+      workplace_id: record.workplace_id || undefined,
       required_qualification_level: record.required_qualification_level || undefined,
       required_specialty: record.required_specialty || '',
       max_headcount: record.max_headcount,
@@ -159,6 +188,24 @@ export function JobPositionList() {
       },
     },
     {
+      title: 'Nơi làm việc', dataIndex: 'workplace_name', key: 'workplace', width: 180,
+      render: (_: string, record: JobPosition) => {
+        if (isEditing(record.id)) {
+          return (
+            <Select
+              allowClear
+              placeholder="Chọn nơi làm việc"
+              value={editData.workplace_id}
+              onChange={(v) => updateField('workplace_id', v)}
+              options={workplaces.map((w) => ({ label: w.name, value: w.id }))}
+              style={{ width: '100%' }}
+            />
+          );
+        }
+        return record.workplace_name ? <span>{record.workplace_name}</span> : <span style={{ color: '#94a3b8' }}>-</span>;
+      },
+    },
+    {
       title: 'Bằng cấp (trình độ)', dataIndex: 'required_qualification_level', key: 'qualification', width: 160,
       render: (_: string, record: JobPosition) => {
         if (isEditing(record.id)) {
@@ -186,9 +233,29 @@ export function JobPositionList() {
       },
     },
     {
-      title: 'Số lượng (hiện tại / tối đa)', key: 'headcount', width: 170,
+      title: 'Số lượng (hiện tại / tối đa)', key: 'headcount', width: 220,
       sorter: (a: JobPosition, b: JobPosition) => (a.current_headcount || 0) - (b.current_headcount || 0),
       render: (_: any, record: JobPosition) => {
+        if (isEditing(record.id)) {
+          const isOver = (record.current_headcount || 0) > (editData.max_headcount || 0);
+          return (
+            <Space align="center" size={6}>
+              <span style={{ fontSize: 13, color: '#475569' }}>{record.current_headcount || 0} /</span>
+              <InputNumber
+                min={0}
+                value={editData.max_headcount}
+                onChange={(v) => updateField('max_headcount', v || 0)}
+                style={{ width: 80 }}
+                placeholder="Tối đa"
+              />
+              {isOver && (
+                <Tooltip title="Định biên tối đa nhỏ hơn số lượng nhân sự hiện có!">
+                  <WarningOutlined style={{ color: '#ff4d4f' }} />
+                </Tooltip>
+              )}
+            </Space>
+          );
+        }
         const over = (record.current_headcount || 0) > (record.max_headcount || 0);
         return (
           <Space>
@@ -230,7 +297,7 @@ export function JobPositionList() {
         );
       },
     },
-  ], [editingId, editData]);
+  ], [editingId, editData, workplaces]);
 
   const newRow = {
     id: 'new',
@@ -243,17 +310,33 @@ export function JobPositionList() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button icon={<DownloadOutlined />} onClick={handleExport}>
+          Xuất Excel
+        </Button>
         <PermGate perms={[PERMISSIONS.CAN_MANAGE_SETTINGS]}>
-          <Tooltip title="Alt+N">
-            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={adding}>
-              Thêm vị trí việc làm
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+              Nhập Excel
             </Button>
-          </Tooltip>
+            <Tooltip title="Alt+N">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={adding}>
+                Thêm vị trí việc làm
+              </Button>
+            </Tooltip>
+          </Space>
         </PermGate>
       </div>
 
-      <Table dataSource={dataSource} columns={columns} rowKey="id" loading={loading} pagination={false} scroll={{ x: 1100 }} />
+      <Table dataSource={dataSource} columns={columns} rowKey="id" loading={loading} pagination={false} scroll={{ x: 1250 }} />
+
+      <JobPositionImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={fetchData}
+      />
     </div>
   );
 }
+
+
