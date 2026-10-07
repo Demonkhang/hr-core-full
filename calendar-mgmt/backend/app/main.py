@@ -25,6 +25,14 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("ALTER TABLE meeting_schedules DROP COLUMN IF EXISTS end_time"))
+    
+    try:
+        from app.seed import seed
+        await seed()
+        logger.info("Auto-seed check completed successfully.")
+    except Exception as e:
+        logger.warning(f"Auto-seed warning: {e}")
+
     yield
     await engine.dispose()
     logger.info("Application shutdown")

@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Auto-migration workplace_id warning: {e}")
 
+    # Seed initial data (Admin user, departments, workplaces, positions) if empty
+    try:
+        from app.seed import seed
+        await seed()
+        logger.info("Auto-seed check completed successfully.")
+    except Exception as e:
+        logger.warning(f"Auto-seed warning: {e}")
+
     # Seed shift_rate_configs default values if empty
     from app.database import async_session_factory
     from app.models.shift_rate_config import ShiftRateConfig
