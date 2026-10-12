@@ -9,6 +9,7 @@ from app.api.v1.employees import router as employees_router
 from app.api.v1.employee_processes import router as employee_processes_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.audit_logs import router as audit_logs_router
+from app.api.v1.payroll import router as payroll_router
 
 
 api_router = APIRouter(prefix="/api/v1")
@@ -23,3 +24,5 @@ api_router.include_router(employees_router, tags=["Employees"])
 api_router.include_router(employee_processes_router, tags=["Employee Processes"])
 api_router.include_router(dashboard_router, prefix="/reports", tags=["Dashboard"])
 api_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit Logs"])
+api_router.include_router(payroll_router, prefix="/payroll", tags=["Payroll"])
+

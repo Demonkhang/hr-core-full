@@ -128,3 +128,20 @@ async def get_department_schedule_report(
         department_ids=department_id,
     )
     return result
+
+
+@router.post("/monthly-summary/finalize")
+async def finalize_monthly_summary(
+    month: str = Query(..., description="Tháng dạng YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    perms: dict = Depends(get_current_permissions),
+):
+    if not perms.get("can_manage_settings") and not current_user.get("is_super_admin"):
+        raise ForbiddenError(detail="Chỉ Quản trị viên mới có quyền chốt bảng công")
+    month_date = _parse_month(month)
+    if not month_date:
+        raise ValidationError(detail="Tháng không hợp lệ")
+    token = current_user.get("_token", "")
+    return await report_service.finalize_monthly_summary(db, month=month_date, token=token)
+

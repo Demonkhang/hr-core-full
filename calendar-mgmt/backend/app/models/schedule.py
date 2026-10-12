@@ -28,5 +28,5 @@ class Schedule(Base, UUIDMixin, TimestampMixin):
     adjusted_from_id = Column(UUID(as_uuid=True), nullable=True, index=True)
 
     __table_args__ = (
-        UniqueConstraint("employee_id", "date", name="uq_employee_date"),
+        UniqueConstraint("employee_id", "date", "shift_template_id", name="uq_employee_date_shift"),
     )

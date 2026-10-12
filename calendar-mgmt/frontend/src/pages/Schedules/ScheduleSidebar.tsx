@@ -81,11 +81,11 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
         date_to: selectedDateSidebar,
         include_cancelled: true,
       });
-      const existingSet = new Set(existing.filter((s) => s.status !== 'cancelled').map((s) => s.employee_id));
+      const existingSet = new Set(existing.filter((s) => s.status !== 'cancelled' && s.shift_template_id === assigning.stId).map((s) => s.employee_id));
       const skipIds = empIdsToAssign.filter((id) => existingSet.has(id));
       if (skipIds.length > 0) {
         const names = skipIds.map((id) => allEmployees.find((e) => e.id === id)?.full_name || '').filter(Boolean).join(', ');
-        message.warning(`${names} đã có lịch trực ngày này`);
+        message.warning(`${names} đã được phân ca trực này`);
       }
       const newIds = empIdsToAssign.filter((id) => !existingSet.has(id));
       for (const empId of newIds) {
@@ -129,7 +129,7 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
       defaultActiveKey={wpList.map((w) => w.id)}
       items={wpList.map((wp) => {
         const wpTemplates = shiftTemplates.filter((st) => st.workplace_id === wp.id && st.is_active);
-        const wpSchedules = sidebarSch.filter((s) => s.workplace_id === wp.id);
+        const wpSchedules = sidebarSch.filter((s) => s.workplace_id === wp.id && s.status !== 'cancelled');
         const scheduleByTemplate = new Map<string, Schedule[]>();
         for (const s of wpSchedules) {
           const list = scheduleByTemplate.get(s.shift_template_id) || [];

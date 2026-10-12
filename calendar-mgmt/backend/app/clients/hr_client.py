@@ -27,6 +27,16 @@ class HRClient:
     def _cache_set(self, key: str, data: dict) -> None:
         self._cache[key] = {"data": data, "ts": time.time()}
 
+    def clear_cache(self, key: Optional[str] = None) -> None:
+        if key:
+            self._cache.pop(key, None)
+            # If key is prefix e.g. emp:
+            keys_to_del = [k for k in self._cache.keys() if k.startswith(key)]
+            for k in keys_to_del:
+                self._cache.pop(k, None)
+        else:
+            self._cache.clear()
+
     async def get_employee(self, employee_id: str, token: str = "") -> Optional[dict]:
         cache_key = f"emp:{employee_id}"
         cached = self._cache_get(cache_key)

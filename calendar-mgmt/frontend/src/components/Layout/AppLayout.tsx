@@ -1,5 +1,6 @@
 import { ReactNode, useState, useMemo } from 'react';
-import { Layout, Menu, Typography, Dropdown, Space } from 'antd';
+import { Layout, Menu, Typography, Dropdown, Space, Button } from 'antd';
+
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -375,10 +376,31 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Dropdown
+              menu={{
+                items: [
+                  { key: 'calendar', label: '📅 Quản lý Lịch (Calendar)', disabled: true },
+                  { key: 'hr', label: '🏛️ Quản lý Nhân sự (HR Core)' },
+                ],
+                onClick: ({ key }: any) => {
+
+                  if (key === 'hr') {
+                    const token = localStorage.getItem('access_token');
+                    window.location.href = `http://localhost:5173?token=${encodeURIComponent(token || '')}`;
+                  }
+                },
+              }}
+            >
+              <Button type="default" size="small" style={{ borderRadius: 6, fontWeight: 500 }}>
+                📅 Calendar ▾
+              </Button>
+            </Dropdown>
+
+            <Dropdown
               trigger={['click']}
               placement="bottomRight"
               menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
             >
+
               <div style={{
                 display: 'flex',
                 alignItems: 'center',

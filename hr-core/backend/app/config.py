@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     JWT_AUDIENCE: str = "mbs-hr-api"
 
     FRONTEND_URL: str = "http://localhost:5173"
+    CALENDAR_MGMT_BASE_URL: str = "http://localhost:8002"
 
     LOG_LEVEL: str = "INFO"
 

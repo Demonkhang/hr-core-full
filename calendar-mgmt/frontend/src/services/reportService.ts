@@ -16,4 +16,12 @@ export const reportService = {
     const res = await apiClient.get(API_ENDPOINTS.REPORTS_DEPT_SCHEDULE, { params });
     return res.data;
   },
+
+  async finalizeMonthlySummary(month: string): Promise<any> {
+    const res = await apiClient.post(`${API_ENDPOINTS.REPORTS_MONTHLY_SUMMARY}/finalize`, null, {
+      params: { month },
+    });
+    return res.data;
+  },
 };
+

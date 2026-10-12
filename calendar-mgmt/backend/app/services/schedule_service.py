@@ -53,11 +53,12 @@ async def create_schedule(
         select(Schedule).where(
             Schedule.employee_id == employee_id,
             Schedule.date == schedule_date,
+            Schedule.shift_template_id == shift_template_id,
         )
     )
     existing_schedule = existing.scalar_one_or_none()
     if existing_schedule and existing_schedule.status != ScheduleStatus.CANCELLED:
-        raise ConflictError("Nhân viên đã có lịch trực trong ngày này")
+        raise ConflictError("Nhân viên đã được phân ca trực này trong ngày")
 
     hours = calculate_shift_hours(shift.start_time, shift.end_time)
 

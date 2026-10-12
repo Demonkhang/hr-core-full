@@ -25,6 +25,15 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("ALTER TABLE meeting_schedules DROP COLUMN IF EXISTS end_time"))
+        try:
+            await conn.execute(text("ALTER TABLE schedules DROP CONSTRAINT IF EXISTS uq_employee_date"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE schedules DROP CONSTRAINT IF EXISTS uq_employee_date_shift"))
+            await conn.execute(text("ALTER TABLE schedules ADD CONSTRAINT uq_employee_date_shift UNIQUE (employee_id, date, shift_template_id)"))
+        except Exception:
+            pass
     
     try:
         from app.seed import seed

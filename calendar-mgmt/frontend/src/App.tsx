@@ -23,10 +23,17 @@ function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ssoToken = urlParams.get('token');
+    if (ssoToken) {
+      localStorage.setItem('access_token', ssoToken);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     const handleLogout = () => navigate(ROUTES.LOGIN, { replace: true });
     window.addEventListener('auth:logout', handleLogout);
     return () => window.removeEventListener('auth:logout', handleLogout);
   }, [navigate]);
+
 
   return (
     <Routes>

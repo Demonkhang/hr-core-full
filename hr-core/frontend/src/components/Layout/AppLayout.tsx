@@ -289,7 +289,28 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'hr', label: '🏛️ Quản lý Nhân sự (HR Core)', disabled: true },
+                  { key: 'calendar', label: '📅 Quản lý Lịch (Calendar)' },
+                ],
+                onClick: ({ key }: any) => {
+
+                  if (key === 'calendar') {
+                    const token = localStorage.getItem('access_token');
+                    window.location.href = `http://localhost:5174?token=${encodeURIComponent(token || '')}`;
+                  }
+                },
+              }}
+            >
+              <Button type="default" size="small" style={{ borderRadius: 6, fontWeight: 500 }}>
+                🏛️ HR Core ▾
+              </Button>
+            </Dropdown>
+
             <Tooltip title={isDark ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}>
+
               <Button
                 type="text"
                 shape="circle"

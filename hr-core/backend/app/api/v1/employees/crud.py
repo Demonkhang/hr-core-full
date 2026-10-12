@@ -20,6 +20,7 @@ from app.models.job_position import JobPosition
 from app.core.exceptions import NotFoundError, ConflictError, ForbiddenError
 from app.services.employee_account_service import auto_provision_user
 from app.services.audit_service import create_audit_log
+from app.services.calendar_sync_service import notify_calendar_clear_cache, notify_calendar_offboard_employee
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +308,7 @@ async def update_employee(
             resource_id=str(emp.id), user_id=str(current_user.id),
             old_values=old_values, new_values=new_vals, success=True,
         )
+        await notify_calendar_clear_cache(f"emp:{emp.id}")
         return await _build_employee_response(emp, db)
     except (NotFoundError, ConflictError):
         raise
@@ -354,6 +356,7 @@ async def delete_employee(
         )
         await db.delete(emp)
         await db.flush()
+        await notify_calendar_offboard_employee(emp_id)
         return {"message": "Đã xóa vĩnh viễn nhân viên khỏi hệ thống"}
 
     if not body or not body.status:
@@ -374,7 +377,9 @@ async def delete_employee(
         old_values=old_values, new_values={"is_active": False, "status": body.status}, success=True,
     )
     await db.flush()
+    await notify_calendar_offboard_employee(emp_id)
     return {"message": RESPONSE_MESSAGES["EMPLOYEE_DEACTIVATED"]}
+
 
 
 @router.patch("/{emp_id}/restore")

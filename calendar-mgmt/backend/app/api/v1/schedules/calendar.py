@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.api.deps import get_current_user, get_current_permissions
-from app.core.constants import SCOPE_SELF, SCOPE_DEPARTMENT, RESPONSE_MESSAGES
+from app.core.constants import SCOPE_SELF, SCOPE_DEPARTMENT, RESPONSE_MESSAGES, ScheduleStatus
 from app.core.exceptions import ForbiddenError
 from app.schemas.schedule import ScheduleResponse, CalendarResponse, CalendarCell
 from app.models.schedule import Schedule
@@ -56,6 +56,7 @@ async def get_calendar(
     query = select(Schedule).where(
         Schedule.date >= month_start,
         Schedule.date < month_end,
+        Schedule.status != ScheduleStatus.CANCELLED,
     ).order_by(Schedule.date)
 
     if scope == SCOPE_SELF and employee_id:

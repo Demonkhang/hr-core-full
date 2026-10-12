@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Table, Select, DatePicker, message, Typography, Spin, Button } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { departmentService } from '@/services/departmentService';
 import { reportService } from '@/services/reportService';
 import type { Department } from '@/types/department';
@@ -13,6 +13,7 @@ export function MonthlyReport() {
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [finalizing, setFinalizing] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -39,6 +40,21 @@ export function MonthlyReport() {
   const totalOT = data.reduce((sum, r) => sum + r.overtime_hours, 0);
   const totalAnnualLeave = data.reduce((sum, r) => sum + (r.annual_leave_days || 0), 0);
   const totalOtherLeave = data.reduce((sum, r) => sum + (r.other_leave_days || 0), 0);
+
+  const handleFinalize = async () => {
+    const monthStr = selectedMonth.format(DATE_FORMATS.ISO_MONTH);
+    setFinalizing(true);
+    try {
+      const res = await reportService.finalizeMonthlySummary(monthStr);
+      message.success(res.message || 'Chốt bảng công tháng thành công');
+      fetchData();
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || 'Không thể chốt bảng công';
+      message.error(detail);
+    } finally {
+      setFinalizing(false);
+    }
+  };
 
   const handleExportExcel = async () => {
     try {
@@ -90,6 +106,8 @@ export function MonthlyReport() {
 
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
 
+  const isAllFinalized = data.length > 0 && data.every((r: any) => r.is_finalized);
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 24, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -119,8 +137,18 @@ export function MonthlyReport() {
               format={DATE_FORMATS.DISPLAY_MONTH}
             />
             <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>Xuất Excel</Button>
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              loading={finalizing}
+              disabled={isAllFinalized}
+              onClick={handleFinalize}
+            >
+              {isAllFinalized ? 'Đã chốt công' : 'Chốt công tháng'}
+            </Button>
           </div>
         )}
+
         dataSource={data}
         columns={columns}
         rowKey="id"

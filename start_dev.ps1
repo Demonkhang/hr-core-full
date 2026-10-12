@@ -1,5 +1,18 @@
 Write-Host "Starting HR-Core and Calendar-Mgmt Development Servers..." -ForegroundColor Green
 
+# Clean up any leftover processes using dev ports if stuck
+$ports = @(8001, 8002)
+foreach ($port in $ports) {
+    $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    if ($conns) {
+        foreach ($conn in $conns) {
+            if ($conn.OwningProcess -gt 0) {
+                Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
 $rootDir = $PSScriptRoot
 
 Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\hr-core\backend`" && python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload" -WindowStyle Normal
