@@ -46,8 +46,8 @@ export const leaveRegistrationService = {
     return response.data;
   },
 
-  reject: async (id: string): Promise<LeaveRegistration> => {
-    const response = await apiClient.post<LeaveRegistration>(API_ENDPOINTS.LEAVE_REGISTRATION_REJECT(id));
+  reject: async (id: string, reason: string = ''): Promise<LeaveRegistration> => {
+    const response = await apiClient.post<LeaveRegistration>(API_ENDPOINTS.LEAVE_REGISTRATION_REJECT(id), { rejection_reason: reason });
     return response.data;
   },
 

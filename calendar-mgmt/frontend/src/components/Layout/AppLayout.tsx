@@ -1,4 +1,4 @@
-import { ReactNode, useState, useMemo } from 'react';
+import { ReactNode, useState, useMemo, useEffect } from 'react';
 import { Layout, Menu, Typography, Dropdown, Space, Button } from 'antd';
 
 import {
@@ -167,6 +167,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const menuItems = useMemo(() => buildMenuItems(user), [user]);
+
+  useEffect(() => {
+    useAuthStore.getState().refreshPermissions().catch(() => {});
+    const onFocus = () => {
+      useAuthStore.getState().refreshPermissions().catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();

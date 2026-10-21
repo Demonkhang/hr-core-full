@@ -42,7 +42,7 @@ async def get_monthly_summary(
     sched_query = (
         select(Schedule)
         .where(Schedule.date >= month, Schedule.date < next_month)
-        .where(Schedule.status != ScheduleStatus.DRAFT)
+        .where(Schedule.status != ScheduleStatus.DRAFT, Schedule.status != ScheduleStatus.CANCELLED)
     )
     if employee_id:
         sched_query = sched_query.where(Schedule.employee_id == employee_id)
@@ -164,7 +164,7 @@ async def get_department_schedule_report(
         )
         .join(ShiftTemplate, Schedule.shift_template_id == ShiftTemplate.id)
         .where(Schedule.date.between(date_from, date_to))
-        .where(Schedule.status != ScheduleStatus.DRAFT)
+        .where(Schedule.status != ScheduleStatus.DRAFT, Schedule.status != ScheduleStatus.CANCELLED)
     )
 
     result = await db.execute(query)

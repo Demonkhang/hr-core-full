@@ -36,7 +36,7 @@ export const overtimeRegistrationService = {
   },
 
   async reject(id: string, reason: string): Promise<OvertimeRegistration> {
-    const res = await apiClient.post(API_ENDPOINTS.OVERTIME_REGISTRATION_REJECT(id), null, { params: { reason } });
+    const res = await apiClient.post(API_ENDPOINTS.OVERTIME_REGISTRATION_REJECT(id), { rejection_reason: reason });
     return res.data;
   },
 

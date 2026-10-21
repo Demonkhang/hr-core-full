@@ -205,10 +205,13 @@ export function useSchedule() {
     }
   };
 
-  const openScheduleModal = async (date: string) => {
+  const openScheduleModal = async (date: string, autoOpenAdd: boolean = false) => {
     setSelectedDate(date);
     form.resetFields();
-    setShowForm(false);
+    if (autoOpenAdd && user?.employee_id && user?.permissions?.scope === SCOPE.SELF) {
+      form.setFieldsValue({ employee_id: [user.employee_id] });
+    }
+    setShowForm(autoOpenAdd);
     setEditingSchedule(null);
     setModalOpen(true);
     setLoadingModal(true);
@@ -220,6 +223,10 @@ export function useSchedule() {
     } finally {
       setLoadingModal(false);
     }
+  };
+
+  const handleOpenRegisterSchedule = () => {
+    openScheduleModal(selectedDateSidebar, true);
   };
 
   const handleCellClick = (dateStr: string) => {
@@ -241,6 +248,7 @@ export function useSchedule() {
   };
 
   return {
+    handleOpenRegisterSchedule,
     departments,
     employees,
     shiftTemplates,

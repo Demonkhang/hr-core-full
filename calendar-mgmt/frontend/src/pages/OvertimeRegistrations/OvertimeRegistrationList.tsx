@@ -31,18 +31,24 @@ export function OvertimeRegistrationList() {
   const [adding, setAdding] = useState(false);
   const [form] = Form.useForm();
   const user = useAuthStore((s) => s.user);
-  const canManage = user?.is_super_admin || user?.permissions?.can_manage_employees;
+  const canManage = user?.is_super_admin || user?.permissions?.can_manage_overtime;
+  const canApprove = user?.is_super_admin || user?.permissions?.can_approve_overtime;
   const inputRef = useRef<InputRef>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [batchRejectOpen, setBatchRejectOpen] = useState(false);
   const [batchRejectReason, setBatchRejectReason] = useState('');
   const [batchLoading, setBatchLoading] = useState(false);
+  const [singleRejectRecord, setSingleRejectRecord] = useState<OvertimeRegistration | null>(null);
+  const [singleRejectReason, setSingleRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const params: any = { date_from: dayjs().format('YYYY-MM-DD') };
-      if (!canManage && user?.employee_id) {
+      const userScope = user?.permissions?.scope;
+      const isSuperAdmin = user?.is_super_admin;
+      if (!isSuperAdmin && !canApprove && userScope === 'self' && user?.employee_id) {
         params.employee_id = user.employee_id;
       }
       const [data, emps] = await Promise.all([
@@ -55,6 +61,32 @@ export function OvertimeRegistrationList() {
       message.error('Không thể tải dữ liệu');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSingleApprove = async (id: string) => {
+    try {
+      await overtimeRegistrationService.approve(id);
+      message.success('Đã duyệt đăng ký thêm giờ');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || 'Lỗi khi duyệt đăng ký');
+    }
+  };
+
+  const handleSingleReject = async () => {
+    if (!singleRejectRecord || !singleRejectReason.trim()) return;
+    setActionLoading(true);
+    try {
+      await overtimeRegistrationService.reject(singleRejectRecord.id, singleRejectReason.trim());
+      message.success('Đã từ chối đăng ký thêm giờ');
+      setSingleRejectRecord(null);
+      setSingleRejectReason('');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || 'Lỗi khi từ chối đăng ký');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -281,14 +313,18 @@ export function OvertimeRegistrationList() {
       },
     },
     {
-      title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 100,
+      title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 110,
       filters: Object.entries(STATUS_LABELS).map(([value, text]) => ({ text, value })),
       onFilter: (value: any, record: OvertimeRegistration) => record.status === value,
       sorter: (a: OvertimeRegistration, b: OvertimeRegistration) => (a.status || '').localeCompare(b.status || ''),
-      render: (v: string) => <Tag color={STATUS_COLORS[v]}>{STATUS_LABELS[v] || v}</Tag>,
+      render: (v: string, record: OvertimeRegistration) => (
+        <Tooltip title={v === 'rejected' && record.rejection_reason ? `Lý do từ chối: ${record.rejection_reason}` : undefined}>
+          <Tag color={STATUS_COLORS[v]}>{STATUS_LABELS[v] || v}</Tag>
+        </Tooltip>
+      ),
     },
     {
-      title: 'Hành động', key: 'actions', width: 100,
+      title: 'Hành động', key: 'actions', width: 120,
       render: (_: any, record: OvertimeRegistration) => {
         if (isEditing(record)) {
           return (
@@ -298,23 +334,69 @@ export function OvertimeRegistrationList() {
             </Space>
           );
         }
+
+        const isOwner = record.employee_id === user?.employee_id;
+        const canEditOrDelete = record.status === 'pending' && (isOwner || canManage);
+
         return (
-          <PermGate perms={['can_manage_employees']}>
-            <Space>
-              {record.status === 'pending' && (
-                <Button type="link" size="small" icon={<EditOutlined />} disabled={editingId !== null} onClick={() => startEdit(record)} />
-              )}
-              {record.is_active && (
-                <Popconfirm title="Xoá đăng ký này?" onConfirm={() => handleDeactivate(record.id)}>
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={editingId !== null} />
+          <Space size={4}>
+            {canApprove && record.status === 'pending' && (
+              <>
+                <Tooltip title="Duyệt đơn">
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ color: '#10b981', padding: '0 4px' }}
+                    icon={<CheckOutlined />}
+                    onClick={() => handleSingleApprove(record.id)}
+                  />
+                </Tooltip>
+                <Tooltip title="Từ chối đơn">
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    style={{ padding: '0 4px' }}
+                    icon={<CloseOutlined />}
+                    onClick={() => {
+                      setSingleRejectRecord(record);
+                      setSingleRejectReason('');
+                    }}
+                  />
+                </Tooltip>
+              </>
+            )}
+            {canEditOrDelete && (
+              <>
+                <Tooltip title="Chỉnh sửa">
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: '0 4px' }}
+                    icon={<EditOutlined />}
+                    disabled={editingId !== null}
+                    onClick={() => startEdit(record)}
+                  />
+                </Tooltip>
+                <Popconfirm title="Huỷ đăng ký này?" onConfirm={() => handleDeactivate(record.id)}>
+                  <Tooltip title="Huỷ đơn">
+                    <Button
+                      type="link"
+                      size="small"
+                      danger
+                      style={{ padding: '0 4px' }}
+                      icon={<DeleteOutlined />}
+                      disabled={editingId !== null}
+                    />
+                  </Tooltip>
                 </Popconfirm>
-              )}
-            </Space>
-          </PermGate>
+              </>
+            )}
+          </Space>
         );
       },
     },
-  ], [editingId, employees, canManage, handleSave, cancel, startEdit, handleDeactivate]);
+  ], [editingId, employees, canManage, canApprove, user, handleSave, cancel, startEdit, handleDeactivate, handleSingleApprove]);
 
   const newRow = {
     id: 'new',
@@ -337,11 +419,13 @@ export function OvertimeRegistrationList() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, alignItems: 'center' }}>
-        <Tooltip title="Alt+N">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={editingId !== null}>
-            Đăng ký thêm giờ
-          </Button>
-        </Tooltip>
+        {canManage && (
+          <Tooltip title="Alt+N">
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={editingId !== null}>
+              Đăng ký thêm giờ
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       <Form form={form} component={false}>
@@ -351,7 +435,7 @@ export function OvertimeRegistrationList() {
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 20 }}
-          rowSelection={editingId ? undefined : {
+          rowSelection={(!canApprove || editingId) ? undefined : {
             selectedRowKeys,
             onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as string[]),
             getCheckboxProps: (record: OvertimeRegistration) => ({
@@ -361,7 +445,7 @@ export function OvertimeRegistrationList() {
         />
       </Form>
 
-      {selectedRowKeys.length > 0 && editingId === null && (
+      {canApprove && selectedRowKeys.length > 0 && editingId === null && (
         <div style={{
           position: 'fixed', bottom: 5, left: '50%', transform: 'translateX(-50%)',
           zIndex: 1000, background: 'rgba(255,255,255,0.5)',
@@ -392,6 +476,23 @@ export function OvertimeRegistrationList() {
           rows={3}
           value={batchRejectReason}
           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBatchRejectReason(e.target.value)}
+        />
+      </Modal>
+
+      <Modal
+        title="Từ chối đăng ký thêm giờ"
+        open={singleRejectRecord !== null}
+        onCancel={() => { setSingleRejectRecord(null); setSingleRejectReason(''); }}
+        onOk={handleSingleReject}
+        confirmLoading={actionLoading}
+        okText="Từ chối"
+        okButtonProps={{ danger: true, disabled: !singleRejectReason.trim() }}
+      >
+        <Input.TextArea
+          placeholder="Nhập lý do từ chối..."
+          rows={3}
+          value={singleRejectReason}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSingleRejectReason(e.target.value)}
         />
       </Modal>
     </div>

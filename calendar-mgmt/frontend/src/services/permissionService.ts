@@ -30,4 +30,9 @@ export const permissionService = {
     const response = await apiClient.put<CalendarPermission>(`/permissions/positions/${id}`, data);
     return response.data;
   },
+
+  getMyPermissions: async (): Promise<Record<string, any>> => {
+    const response = await apiClient.get<Record<string, any>>('/permissions/me');
+    return response.data;
+  },
 };

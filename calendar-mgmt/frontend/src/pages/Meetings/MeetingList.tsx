@@ -24,7 +24,8 @@ export function MeetingList() {
   const [adding, setAdding] = useState(false);
   const [form] = Form.useForm();
   const user = useAuthStore((s) => s.user);
-  const canManage = user?.is_super_admin || user?.permissions?.can_manage_employees;
+  const canManage = user?.is_super_admin || user?.permissions?.can_manage_meetings;
+  const canApprove = user?.is_super_admin || user?.permissions?.can_approve_meetings;
   const inputRef = useRef<InputRef>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailMeeting, setDetailMeeting] = useState<MeetingSchedule | null>(null);
@@ -352,11 +353,13 @@ export function MeetingList() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, alignItems: 'center' }}>
-        <Tooltip title="Alt+N">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={editingId !== null}>
-            Tạo lịch họp
-          </Button>
-        </Tooltip>
+        {canManage && (
+          <Tooltip title="Alt+N">
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={editingId !== null}>
+              Tạo lịch họp
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       <Form form={form} component={false}>
@@ -367,7 +370,7 @@ export function MeetingList() {
           loading={loading}
           pagination={{ pageSize: 20 }}
           scroll={{ x: 1200 }}
-          rowSelection={editingId ? undefined : {
+          rowSelection={(!canApprove || editingId) ? undefined : {
             selectedRowKeys,
             onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as string[]),
             getCheckboxProps: (record: MeetingSchedule) => ({
@@ -377,7 +380,7 @@ export function MeetingList() {
         />
       </Form>
 
-      {selectedRowKeys.length > 0 && editingId === null && (
+      {canApprove && selectedRowKeys.length > 0 && editingId === null && (
         <div style={{
           position: 'fixed',
           bottom: 5,

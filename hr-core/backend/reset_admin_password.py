@@ -12,7 +12,7 @@ async def reset():
         if not user:
             print("Admin user not found.")
             return
-        new_pw = "Admin@123"
+        new_pw = "admin123"
         user.hashed_password = hash_password(new_pw)
         user.must_change_password = False
         await db.commit()

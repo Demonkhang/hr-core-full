@@ -96,9 +96,13 @@ async def create_leave_registration(
     body: LeaveRegistrationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
-    perms: dict = Depends(get_current_permissions),
+    perms: dict = Depends(RequirePermission('can_manage_leave')),
 ):
     employee_id = body.employee_id
+    scope = perms.get("scope", "self")
+    if scope == "self" and str(employee_id) != str(current_user.get("employee_id")):
+        raise ForbiddenError(detail="Bạn chỉ có thể tạo đơn nghỉ phép cho chính mình")
+
     emp = await _fetch_employee(employee_id)
     if not emp:
         raise NotFoundError(detail="Không tìm thấy nhân viên")
@@ -225,7 +229,7 @@ async def bulk_approve_leave(
     body: BulkApproveRequest,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
-    perms: dict = Depends(RequirePermission('can_manage_leave')),
+    perms: dict = Depends(RequirePermission('can_approve_leave')),
 ):
     errors = []
     approved = []
@@ -258,7 +262,7 @@ async def bulk_reject_leave(
     body: BulkRejectRequest,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
-    perms: dict = Depends(RequirePermission('can_manage_leave')),
+    perms: dict = Depends(RequirePermission('can_approve_leave')),
 ):
     errors = []
     rejected = []

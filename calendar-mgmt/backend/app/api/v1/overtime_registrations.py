@@ -83,13 +83,18 @@ async def create_overtime_registration(
     body: OvertimeRegistrationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
-    perms: dict = Depends(get_current_permissions),
+    perms: dict = Depends(RequirePermission('can_manage_overtime')),
 ):
     employee_id = body.employee_id
+    scope = perms.get("scope", "self")
+    if scope == "self" and str(employee_id) != str(current_user.get("employee_id")):
+        raise ForbiddenError(detail="Bạn chỉ có thể tạo đăng ký thêm giờ cho chính mình")
+
     reg_data = body.model_dump()
     reg_data["employee_id"] = employee_id
-    if perms.get("can_approve_overtime"):
-        reg_data["status"] = OvertimeRegistrationStatus.APPROVED
+    # Luôn luôn khởi tạo ở trạng thái PENDING (chờ duyệt)
+    reg_data["status"] = OvertimeRegistrationStatus.PENDING
+
     reg = OvertimeRegistration(**reg_data)
     db.add(reg)
     await db.commit()

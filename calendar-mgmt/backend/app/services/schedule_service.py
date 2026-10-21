@@ -35,6 +35,12 @@ async def create_schedule(
     if not shift:
         raise NotFoundError("Không tìm thấy ca làm việc")
 
+    if shift.department_ids:
+        shift_dept_ids = [str(d) for d in shift.department_ids]
+        emp_dept_id = str(emp.get("department_id")) if emp.get("department_id") else None
+        if emp_dept_id and emp_dept_id not in shift_dept_ids:
+            raise BadRequestError(f"Nhân viên {emp.get('full_name', '')} không thuộc phòng ban được cấu hình cho ca trực này")
+
     from app.models.leave_registration import LeaveRegistration, LeaveRegistrationStatus
     leave_check = await db.execute(
         select(LeaveRegistration).where(
@@ -158,6 +164,7 @@ async def bulk_create_schedules(
                     workplace_id=item.get("workplace_id"),
                     schedule_date=item["date"],
                     created_by=created_by,
+                    auth_token=auth_token,
                     auto_approve=auto_approve,
                 )
                 created.append(schedule)

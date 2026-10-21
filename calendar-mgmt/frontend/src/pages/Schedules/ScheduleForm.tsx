@@ -16,6 +16,7 @@ interface ScheduleFormProps {
 }
 
 export function ScheduleForm({ form, editingSchedule, employees, shiftTemplates, workplaces, selectedWorkplaceId, onSubmit, onCancel }: ScheduleFormProps) {
+  const formWorkplaceId = Form.useWatch('workplace_id', form) || selectedWorkplaceId;
   const selectedShiftId = Form.useWatch('shift_template_id', form);
   const selectedShift = shiftTemplates.find((t) => t.id === selectedShiftId);
   const deptFilteredEmployees = selectedShift?.department_ids?.length
@@ -36,7 +37,10 @@ export function ScheduleForm({ form, editingSchedule, employees, shiftTemplates,
         <Form.Item name="workplace_id" label="Nơi làm việc" rules={[{ required: true }]}>
           <Select
             placeholder="Chọn nơi làm việc"
-            onChange={() => form.setFieldValue('shift_template_id', undefined)}
+            onChange={() => {
+              form.setFieldValue('shift_template_id', undefined);
+              form.setFieldValue('employee_id', undefined);
+            }}
             options={workplaces
               .filter((w) => w.is_active)
               .map((w) => ({
@@ -48,8 +52,9 @@ export function ScheduleForm({ form, editingSchedule, employees, shiftTemplates,
         <Form.Item name="shift_template_id" label="Ca trực" rules={[{ required: true }]}>
           <Select
             placeholder="Chọn ca"
+            onChange={() => form.setFieldValue('employee_id', undefined)}
             options={shiftTemplates
-              .filter((t) => t.is_active && t.workplace_id === selectedWorkplaceId)
+              .filter((t) => t.is_active && (!formWorkplaceId || t.workplace_id === formWorkplaceId))
               .map((t) => ({
                 label: `${t.name} (${t.start_time.slice(0, 5)}-${t.end_time.slice(0, 5)})`,
                 value: t.id,

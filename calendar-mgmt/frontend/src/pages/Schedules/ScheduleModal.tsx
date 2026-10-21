@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { getShiftTime } from '@/utils/scheduleHelpers';
 import { DATE_FORMATS, SCHEDULE_STATUS, STATUS_COLORS, STATUS_TAG_LABELS } from '@/utils/constants';
 import { ScheduleForm } from './ScheduleForm';
+import { useAuthStore } from '@/store/authStore';
 import type { Employee } from '@/types/employee';
 import type { Schedule, ShiftTemplate } from '@/types/schedule';
 import type { Workplace } from '@/types/workplace';
@@ -50,6 +51,9 @@ export function ScheduleModal({
   onCancelForm,
   onFormSubmit,
 }: ScheduleModalProps) {
+  const user = useAuthStore((s) => s.user);
+  const canCreate = user?.is_super_admin || user?.permissions?.can_create_schedule;
+
   const scheduleContent = (() => {
     if (loading) return <Spin style={{ display: 'block', margin: '20px auto' }} />;
     if (schedules.length === 0) {
@@ -176,7 +180,7 @@ export function ScheduleModal({
     >
       {scheduleContent}
 
-      {!showForm && !dayjs(selectedDate).isBefore(dayjs(), 'day') && (
+      {!showForm && !dayjs(selectedDate).isBefore(dayjs(), 'day') && canCreate && (
         <>
           <Divider />
           <Tooltip title="Alt+N">

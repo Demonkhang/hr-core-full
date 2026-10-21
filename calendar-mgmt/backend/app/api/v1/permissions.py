@@ -3,13 +3,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
-from app.api.deps import get_current_user, RequirePermission
+from app.api.deps import get_current_user, get_current_permissions, RequirePermission
 from app.clients.hr_client import hr_client
 from app.models.calendar_permission import CalendarPermission
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/me")
+async def get_my_calendar_permissions(
+    perms: dict = Depends(get_current_permissions),
+):
+    return perms
 
 
 @router.get("/positions")

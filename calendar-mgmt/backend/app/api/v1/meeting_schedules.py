@@ -208,7 +208,7 @@ async def create_meeting_schedule(
         description=body.description,
         department_id=body.department_id,
         created_by_id=current_user.get("id"),
-        status=MeetingStatus.APPROVED if perms.get("can_approve_meetings") else MeetingStatus.PENDING,
+        status=MeetingStatus.PENDING,
     )
     db.add(meeting)
     await db.flush()

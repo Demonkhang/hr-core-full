@@ -34,6 +34,7 @@ export function SchedulePage() {
     handleCloseModal,
     handleCancelForm,
     fetchCalendar,
+    handleOpenRegisterSchedule,
   } = useSchedule();
 
   if (loading && !calendarData.length) {
@@ -65,6 +66,7 @@ export function SchedulePage() {
           deptLocked={deptLocked}
           onDateChange={(date) => handleCellClick(date)}
           departments={departments}
+          onRegisterClick={handleOpenRegisterSchedule}
         />
       </div>
 

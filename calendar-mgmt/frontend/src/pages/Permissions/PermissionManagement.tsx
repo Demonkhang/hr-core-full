@@ -5,6 +5,7 @@ import { permissionService, CalendarPermission } from '@/services/permissionServ
 import { SCOPE_OPTIONS } from '@/utils/constants';
 import { PermGate } from '@/components/Common/PermGate';
 import { PERMISSIONS } from '@/utils/constants';
+import { useAuthStore } from '@/store/authStore';
 
 const SCHEDULE_CRUD_KEYS = ['can_read_schedule', 'can_create_schedule', 'can_update_schedule', 'can_delete_schedule'] as (keyof CalendarPermission)[];
 const ALL_KEYS = [...SCHEDULE_CRUD_KEYS, 'can_approve_schedule', 'can_manage_leave', 'can_approve_leave', 'can_manage_overtime', 'can_approve_overtime', 'can_manage_meetings', 'can_approve_meetings'] as (keyof CalendarPermission)[];
@@ -68,6 +69,7 @@ export function PermissionManagement() {
       setPositions((prev) => prev.map((p) => (p.id === pos.id ? { ...p, ...updated } : p)));
       setEditMap((prev) => { const next = { ...prev }; delete next[pos.id]; return next; });
       message.success(`Đã cập nhật phân quyền cho "${pos.name}"`);
+      useAuthStore.getState().refreshPermissions();
     } catch {
       message.error(`Không thể cập nhật phân quyền cho "${pos.name}"`);
     } finally {

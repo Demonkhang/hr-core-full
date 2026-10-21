@@ -177,7 +177,7 @@ async def create_schedule(
         notes=body.notes,
         created_by=current_user,
         auth_token=auth_token,
-        auto_approve=perms.get("can_approve_schedule", False),
+        auto_approve=False,
     )
     emp = await hr_client.get_employee(body.employee_id, token=auth_token)
     shift = await db.get(ShiftTemplate, body.shift_template_id)
@@ -206,7 +206,7 @@ async def bulk_create_schedules(
         if not await check_scope_for_employee(perms, current_user, item.employee_id, auth_token):
             raise ForbiddenError(detail=RESPONSE_MESSAGES["FORBIDDEN"])
     items = [item.model_dump() for item in body.schedules]
-    result = await bulk_schedules_service(db, items, body.department_id, current_user, auth_token=auth_token, auto_approve=perms.get("can_approve_schedule", False))
+    result = await bulk_schedules_service(db, items, body.department_id, current_user, auth_token=auth_token, auto_approve=False)
     return result
 
 

@@ -1,7 +1,7 @@
 Write-Host "Starting HR-Core and Calendar-Mgmt Development Servers..." -ForegroundColor Green
 
 # Clean up any leftover processes using dev ports if stuck
-$ports = @(8001, 8002)
+$ports = @(8001, 8002, 5173, 5174)
 foreach ($port in $ports) {
     $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
     if ($conns) {

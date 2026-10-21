@@ -13,6 +13,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated && !isLoading) {
       loadUser().finally(() => setChecked(true));
     } else {
+      if (isAuthenticated) {
+        useAuthStore.getState().refreshPermissions().catch(() => {});
+      }
       setChecked(true);
     }
   }, [isAuthenticated, isLoading, loadUser]);

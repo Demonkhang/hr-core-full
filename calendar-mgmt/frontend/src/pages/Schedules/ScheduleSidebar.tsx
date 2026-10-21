@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, Empty, Select, Modal, Button, Space, message, Collapse, Tag, Typography, DatePicker, Segmented } from 'antd';
+import { Card, Empty, Select, Modal, Button, Space, message, Collapse, Tag, Typography, DatePicker, Segmented, Tooltip } from 'antd';
+import { LeftOutlined, RightOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getSchedulesForDate } from '@/utils/scheduleHelpers';
 import { DATE_FORMATS, MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, SCOPE } from '@/utils/constants';
@@ -10,6 +11,7 @@ import type { Employee } from '@/types/employee';
 import type { Schedule, CalendarCell, ShiftTemplate } from '@/types/schedule';
 import type { Workplace } from '@/types/workplace';
 import type { MeetingSchedule } from '@/types/meetingSchedule';
+import { BatchScheduleModal } from './BatchScheduleModal';
 
 interface ScheduleSidebarProps {
   selectedDateSidebar: string;
@@ -24,6 +26,7 @@ interface ScheduleSidebarProps {
   onDateChange: (date: string) => void;
   departments: { id: string; name: string }[];
   deptLocked?: boolean;
+  onRegisterClick?: () => void;
 }
 
 const MIN = 1440;
@@ -37,12 +40,13 @@ function pct(minutes: number) {
   return (minutes / MIN) * 100;
 }
 
-export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates, workplaces, calendarData, meetingData, onRefresh, selectedDept, setSelectedDept, onDateChange, departments, deptLocked }: ScheduleSidebarProps) {
+export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates, workplaces, calendarData, meetingData, onRefresh, selectedDept, setSelectedDept, onDateChange, departments, deptLocked, onRegisterClick }: ScheduleSidebarProps) {
   const [assigning, setAssigning] = useState<{ wpId: string; stId: string; stName: string; deptIds: string[] } | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState('office');
   const user = useAuthStore((s) => s.user);
+  const canCreateSchedule = user?.is_super_admin || user?.permissions?.can_create_schedule;
   const userScope = user?.permissions?.scope;
   const isScopeOrg = userScope === SCOPE.ORGANIZATION;
   const isScopeDept = userScope === SCOPE.DEPARTMENT || (!!user?.department_id && !isScopeOrg);
@@ -128,7 +132,15 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
       key={tabKey}
       defaultActiveKey={wpList.map((w) => w.id)}
       items={wpList.map((wp) => {
-        const wpTemplates = shiftTemplates.filter((st) => st.workplace_id === wp.id && st.is_active);
+        const wpTemplates = shiftTemplates.filter((st) => {
+          if (st.workplace_id !== wp.id || !st.is_active) return false;
+          if (selectedDept && selectedDept.length > 0) {
+            if (st.department_ids && st.department_ids.length > 0) {
+              return st.department_ids.some((dId) => selectedDept.includes(dId));
+            }
+          }
+          return true;
+        });
         const wpSchedules = sidebarSch.filter((s) => s.workplace_id === wp.id && s.status !== 'cancelled');
         const scheduleByTemplate = new Map<string, Schedule[]>();
         for (const s of wpSchedules) {
@@ -206,7 +218,8 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
                 {allBars.map((bar, i) => (
                   <div
                     key={i}
-                    title={`${bar.label}${bar.isCont ? '' : ' — Nhấp đúp để phân ca'}`}
+                    title={`${bar.label}${bar.isCont ? '' : ' — Nhấp để phân ca theo tuần'}`}
+                    onClick={bar.isCont ? undefined : () => setAssigning({ wpId: wp.id, stId: bar.stId, stName: bar.stName, deptIds: bar.deptIds })}
                     onDoubleClick={bar.isCont ? undefined : () => setAssigning({ wpId: wp.id, stId: bar.stId, stName: bar.stName, deptIds: bar.deptIds })}
                     style={{
                       position: 'absolute',
@@ -247,6 +260,20 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
     />
   );
 
+  const sidebarDateObj = dayjs(selectedDateSidebar);
+  const sidebarDayOfWeek = sidebarDateObj.day();
+  const sidebarMonday = sidebarDayOfWeek === 0 ? sidebarDateObj.subtract(6, 'day') : sidebarDateObj.subtract(sidebarDayOfWeek - 1, 'day');
+  const sidebarSunday = sidebarMonday.add(6, 'day');
+  const isSidebarDateInPast = sidebarDateObj.isBefore(dayjs().startOf('day'));
+
+  const handlePrevWeek = () => {
+    onDateChange(sidebarDateObj.subtract(1, 'week').format(DATE_FORMATS.ISO_DATE));
+  };
+
+  const handleNextWeek = () => {
+    onDateChange(sidebarDateObj.add(1, 'week').format(DATE_FORMATS.ISO_DATE));
+  };
+
   return (
     <Card
       size="small"
@@ -256,12 +283,36 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ whiteSpace: 'nowrap', fontSize: 14, fontWeight: 600 }}>Lịch trực ngày</span>
           <DatePicker
-            value={dayjs(selectedDateSidebar)}
+            value={sidebarDateObj}
             onChange={(d: dayjs.Dayjs | null) => d && onDateChange(d.format(DATE_FORMATS.ISO_DATE))}
             allowClear={false}
             size="small"
-            style={{ width: 140 }}
+            style={{ width: 130 }}
           />
+          <Space size={4}>
+            <Button
+              size="small"
+              icon={<LeftOutlined />}
+              onClick={handlePrevWeek}
+              title="Tuần trước"
+            />
+            <Tooltip title={`Khoảng thời gian: ${sidebarMonday.format('DD/MM/YYYY')} - ${sidebarSunday.format('DD/MM/YYYY')}`}>
+              <Tag color="purple" style={{ margin: 0, fontSize: 12, fontWeight: 500, cursor: 'default' }}>
+                Tuần ({sidebarMonday.format('DD/MM')} - {sidebarSunday.format('DD/MM')})
+              </Tag>
+            </Tooltip>
+            <Button
+              size="small"
+              icon={<RightOutlined />}
+              onClick={handleNextWeek}
+              title="Tuần sau"
+            />
+          </Space>
+          {isSidebarDateInPast && (
+            <Tag color="orange" icon={<LockOutlined />} style={{ fontWeight: 600, margin: 0 }}>
+              Quá khứ (Chỉ xem)
+            </Tag>
+          )}
           <span style={{ fontSize: 14, fontWeight: 600 }}>của</span>
           <Select
             mode="multiple"
@@ -274,6 +325,17 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
             placeholder="Chọn bộ phận"
             size="small"
           />
+          {canCreateSchedule && onRegisterClick && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={onRegisterClick}
+              disabled={isSidebarDateInPast}
+            >
+              Đăng ký lịch
+            </Button>
+          )}
           {sortedWps.length > 0 && (
             <Segmented
               value={activeTab}
@@ -324,58 +386,19 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
         </div>
       )}
 
-      <Modal
+      <BatchScheduleModal
         open={assigning !== null}
-        title={`Phân ca: ${assigning?.stName || ''}`}
-        onCancel={() => setAssigning(null)}
-        footer={
-          <Space>
-            <Button onClick={() => setAssigning(null)}>Đóng</Button>
-            <Button type="primary" onClick={handleSave} disabled={selectedIds.length === 0}>Thêm người trực</Button>
-          </Space>
-        }
-        width={400}
-        destroyOnClose
-      >
-        {currentSchedules.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <Typography.Text strong style={{ fontSize: 13 }}>Người trực hiện tại:</Typography.Text>
-            {currentSchedules.map((s) => (
-              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                <span>
-                  <Tag color={s.shift_color || 'blue'}>{s.employee_name || 'Unknown'}</Tag>
-                </span>
-                <Button size="small" danger onClick={() => handleDeleteSchedule(s.id)}>Xoá</Button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div>
-          <Typography.Text strong style={{ fontSize: 13 }}>Thêm người trực:</Typography.Text>
-          <Select
-            mode="multiple"
-            showSearch
-            autoFocus
-            style={{ width: '100%', marginTop: 4 }}
-            placeholder="Chọn nhân viên..."
-            value={selectedIds}
-            onChange={setSelectedIds}
-            optionFilterProp="label"
-            notFoundContent="Không có nhân viên"
-            options={allEmployees
-              .filter((e) => {
-                if (!e.is_active) return false;
-                if (!assigning?.deptIds?.length) {
-                  if (isScopeDept && user?.department_id && e.department_id !== user.department_id) return false;
-                } else if (e.department_id && !assigning.deptIds.includes(e.department_id)) {
-                  return false;
-                }
-                return true;
-              })
-              .map((e) => ({ label: e.full_name, value: e.id }))}
-          />
-        </div>
-      </Modal>
+        onClose={() => setAssigning(null)}
+        assigning={assigning}
+        selectedDate={selectedDateSidebar}
+        departments={departments}
+        workplaces={workplaces}
+        shiftTemplates={shiftTemplates}
+        currentSchedules={currentSchedules}
+        selectedDeptSidebar={selectedDept}
+        onRefresh={onRefresh}
+        onDeleteSchedule={handleDeleteSchedule}
+      />
     </Card>
   );
 }

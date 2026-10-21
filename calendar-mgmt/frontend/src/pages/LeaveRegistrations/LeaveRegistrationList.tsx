@@ -53,16 +53,22 @@ export function LeaveRegistrationList() {
   const [batchRejectOpen, setBatchRejectOpen] = useState(false);
   const [batchRejectReason, setBatchRejectReason] = useState('');
   const [batchLoading, setBatchLoading] = useState(false);
+  const [singleRejectRecord, setSingleRejectRecord] = useState<LeaveRegistration | null>(null);
+  const [singleRejectReason, setSingleRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const [form] = Form.useForm();
   const user = useAuthStore((s) => s.user);
-  const canManage = user?.is_super_admin || user?.permissions?.can_manage_employees;
+  const canManage = user?.is_super_admin || user?.permissions?.can_manage_leave;
+  const canApprove = user?.is_super_admin || user?.permissions?.can_approve_leave;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params: any = { date_from: dayjs().format('YYYY-MM-DD') };
-      if (!canManage && user?.employee_id) {
+      const userScope = user?.permissions?.scope;
+      const isSuperAdmin = user?.is_super_admin;
+      if (!isSuperAdmin && !canApprove && userScope === 'self' && user?.employee_id) {
         params.employee_id = user.employee_id;
       }
       const currentYear = dayjs().year();
@@ -91,7 +97,33 @@ export function LeaveRegistrationList() {
     } finally {
       setLoading(false);
     }
-  }, [canManage, user]);
+  }, [canManage, canApprove, user]);
+
+  const handleSingleApprove = async (id: string) => {
+    try {
+      await leaveRegistrationService.approve(id);
+      message.success('Đã duyệt đơn nghỉ phép');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || 'Lỗi khi duyệt đơn');
+    }
+  };
+
+  const handleSingleReject = async () => {
+    if (!singleRejectRecord || !singleRejectReason.trim()) return;
+    setActionLoading(true);
+    try {
+      await leaveRegistrationService.reject(singleRejectRecord.id, singleRejectReason.trim());
+      message.success('Đã từ chối đơn nghỉ phép');
+      setSingleRejectRecord(null);
+      setSingleRejectReason('');
+      fetchData();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || 'Lỗi khi từ chối đơn');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   useEffect(() => { fetchData(); }, []);
 
@@ -353,10 +385,14 @@ export function LeaveRegistrationList() {
       title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 110,
       filters: Object.entries(STATUS_LABELS).map(([value, text]) => ({ text, value })),
       onFilter: (value: any, record: LeaveRegistration) => record.status === value,
-      render: (v: string) => <Tag color={STATUS_COLORS[v]}>{STATUS_LABELS[v] || v}</Tag>,
+      render: (v: string, record: LeaveRegistration) => (
+        <Tooltip title={v === 'rejected' && record.rejection_reason ? `Lý do từ chối: ${record.rejection_reason}` : undefined}>
+          <Tag color={STATUS_COLORS[v]}>{STATUS_LABELS[v] || v}</Tag>
+        </Tooltip>
+      ),
     },
     {
-      title: 'Hành động', key: 'actions', width: 110,
+      title: 'Hành động', key: 'actions', width: 120,
       render: (_: any, record: LeaveRegistration) => {
         if (isEditing(record)) {
           return null;
@@ -366,12 +402,56 @@ export function LeaveRegistrationList() {
         const canEditOrDelete = record.status === 'pending' && isOwnerOrAdmin;
 
         return (
-          <Space>
+          <Space size={4}>
+            {canApprove && record.status === 'pending' && (
+              <>
+                <Tooltip title="Duyệt đơn">
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ color: '#10b981', padding: '0 4px' }}
+                    icon={<CheckOutlined />}
+                    onClick={() => handleSingleApprove(record.id)}
+                  />
+                </Tooltip>
+                <Tooltip title="Từ chối đơn">
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    style={{ padding: '0 4px' }}
+                    icon={<CloseOutlined />}
+                    onClick={() => {
+                      setSingleRejectRecord(record);
+                      setSingleRejectReason('');
+                    }}
+                  />
+                </Tooltip>
+              </>
+            )}
             {canEditOrDelete && (
               <>
-                <Button type="link" size="small" icon={<EditOutlined />} disabled={editingId !== null} onClick={() => startEdit(record)} />
+                <Tooltip title="Chỉnh sửa">
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: '0 4px' }}
+                    icon={<EditOutlined />}
+                    disabled={editingId !== null}
+                    onClick={() => startEdit(record)}
+                  />
+                </Tooltip>
                 <Popconfirm title="Huỷ đơn xin phép này?" onConfirm={() => handleDelete(record.id)}>
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={editingId !== null} />
+                  <Tooltip title="Huỷ đơn">
+                    <Button
+                      type="link"
+                      size="small"
+                      danger
+                      style={{ padding: '0 4px' }}
+                      icon={<DeleteOutlined />}
+                      disabled={editingId !== null}
+                    />
+                  </Tooltip>
                 </Popconfirm>
               </>
             )}
@@ -379,7 +459,7 @@ export function LeaveRegistrationList() {
         );
       },
     },
-  ], [editingId, employees, canManage, user, handleSave, cancel, handleDelete, balancesMap]);
+  ], [editingId, employees, canManage, canApprove, user, handleSave, cancel, handleDelete, balancesMap, handleSingleApprove]);
 
   const newRow = {
     id: 'new',
@@ -416,13 +496,13 @@ export function LeaveRegistrationList() {
               Huỷ
             </Button>
           </>
-        ) : (
+        ) : canManage ? (
           <Tooltip title="Alt+N">
             <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
               Đăng ký
             </Button>
           </Tooltip>
-        )}
+        ) : null}
       </div>
 
       <Form form={form} component={false}>
@@ -432,7 +512,7 @@ export function LeaveRegistrationList() {
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 20 }}
-          rowSelection={editingId ? undefined : {
+          rowSelection={(!canApprove || editingId) ? undefined : {
             selectedRowKeys,
             onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as string[]),
             getCheckboxProps: (record: LeaveRegistration) => ({
@@ -442,7 +522,7 @@ export function LeaveRegistrationList() {
         />
       </Form>
 
-      {selectedRowKeys.length > 0 && editingId === null && (
+      {canApprove && selectedRowKeys.length > 0 && editingId === null && (
         <div style={{
           position: 'fixed', bottom: 5, left: '50%', transform: 'translateX(-50%)',
           zIndex: 1000, background: 'rgba(255,255,255,0.5)',
@@ -473,6 +553,23 @@ export function LeaveRegistrationList() {
           rows={3}
           value={batchRejectReason}
           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBatchRejectReason(e.target.value)}
+        />
+      </Modal>
+
+      <Modal
+        title="Từ chối đơn xin nghỉ phép"
+        open={singleRejectRecord !== null}
+        onCancel={() => { setSingleRejectRecord(null); setSingleRejectReason(''); }}
+        onOk={handleSingleReject}
+        confirmLoading={actionLoading}
+        okText="Từ chối"
+        okButtonProps={{ danger: true, disabled: !singleRejectReason.trim() }}
+      >
+        <Input.TextArea
+          placeholder="Nhập lý do từ chối..."
+          rows={3}
+          value={singleRejectReason}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSingleRejectReason(e.target.value)}
         />
       </Modal>
     </div>
