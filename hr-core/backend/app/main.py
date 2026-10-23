@@ -1,3 +1,4 @@
+import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -140,7 +141,13 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 app.include_router(api_router)
 
+uploads_dir = os.path.join(os.getcwd(), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+from fastapi.staticfiles import StaticFiles
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 
 @app.get("/health")
+
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.VERSION}

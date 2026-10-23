@@ -50,6 +50,16 @@ export const overtimeRegistrationService = {
     return res.data;
   },
 
+  async checkConflict(params: {
+    employee_id: string;
+    date: string;
+    start_time?: string;
+    end_time?: string;
+  }): Promise<{ has_conflict: boolean; conflict?: { schedule_id: string; shift_name: string; start_time: string; end_time: string; message: string } | null }> {
+    const res = await apiClient.get('/overtime-registrations/check-conflict', { params });
+    return res.data;
+  },
+
   async deactivate(id: string): Promise<void> {
     await apiClient.delete(API_ENDPOINTS.OVERTIME_REGISTRATION(id));
   },

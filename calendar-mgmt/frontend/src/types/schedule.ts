@@ -38,6 +38,8 @@ export interface Schedule {
   employee_name: string | null;
   shift_name: string | null;
   shift_color: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
   workplace_name: string | null;
   department_name: string | null;
   created_at: string | null;

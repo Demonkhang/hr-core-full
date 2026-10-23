@@ -12,7 +12,9 @@ import { QualificationPieChart } from '@/components/Dashboard/QualificationPieCh
 import { HeadcountCapacityCard } from '@/components/Dashboard/HeadcountCapacityCard';
 import { RecentActivitiesCard } from '@/components/Dashboard/RecentActivitiesCard';
 import { RecentHiresCard } from '@/components/Dashboard/RecentHiresCard';
+import { ExpiringContractsCard } from '@/components/Dashboard/ExpiringContractsCard';
 import { ImportModal } from '@/components/Employees/ImportModal';
+
 import type { DashboardData } from '@/types/dashboard';
 import type { Department } from '@/types/department';
 
@@ -113,6 +115,13 @@ export function Dashboard() {
         </Col>
       </Row>
 
+      {/* Expiring Contracts Alert Card */}
+      <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
+        <Col xs={24}>
+          <ExpiringContractsCard />
+        </Col>
+      </Row>
+
       {/* Row 3: Recent New Hires & Recent Audit Activity */}
       <Row gutter={[16, 16]} style={{ marginTop: 20 }}>
         <Col xs={24} lg={12}>
@@ -122,6 +131,7 @@ export function Dashboard() {
           <RecentActivitiesCard data={data?.recent_activities ?? []} />
         </Col>
       </Row>
+
 
       {/* Import Modal */}
       <ImportModal

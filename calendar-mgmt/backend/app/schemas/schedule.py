@@ -51,6 +51,8 @@ class ScheduleResponse(BaseModel):
     employee_name: Optional[str] = None
     shift_name: Optional[str] = None
     shift_color: Optional[str] = None
+    shift_start_time: Optional[time] = None
+    shift_end_time: Optional[time] = None
     workplace_name: Optional[str] = None
     department_name: Optional[str] = None
     created_at: Optional[datetime] = None

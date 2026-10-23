@@ -10,6 +10,7 @@ export const ROUTES = {
   DASHBOARD: '/',
   SHIFT_TEMPLATES: '/shift-templates',
   SCHEDULES: '/schedules',
+  SCHEDULES_BY_EMPLOYEE: '/schedules/by-employee',
   SCHEDULES_APPROVAL: '/schedules/approval',
   OVERTIME_REGISTRATIONS: '/overtime-registrations',
   OVERTIME_APPROVAL: '/overtime-registrations/approval',

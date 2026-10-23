@@ -44,33 +44,113 @@ export function OvertimeHistory() {
   useEffect(() => { fetchData(); }, []);
 
   const columns = useMemo(() => [
-    { title: 'Ngày', dataIndex: 'date', key: 'date', width: 130,
+    {
+      title: 'Ngày',
+      dataIndex: 'date',
+      key: 'date',
+      width: 140,
       sorter: (a: OvertimeRegistration, b: OvertimeRegistration) => (a.date || '').localeCompare(b.date || ''),
-      render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '-',
+      render: (v: string) => (
+        <span>
+          <span style={{ fontWeight: 600 }}>{v ? dayjs(v).format('DD/MM/YYYY') : '-'}</span>{' '}
+          <Tag
+            style={{
+              fontSize: 10,
+              lineHeight: '16px',
+              padding: '0 4px',
+              borderRadius: 4,
+              background: '#fff7ed',
+              color: '#ea580c',
+              border: '1px solid #ffedd5',
+              fontWeight: 600,
+            }}
+          >
+            OT
+          </Tag>
+        </span>
+      ),
     },
-    { title: 'Nhân viên', dataIndex: 'employee_name', key: 'employee_name', width: 180,
+    {
+      title: 'Nhân viên',
+      dataIndex: 'employee_name',
+      key: 'employee_name',
+      width: 180,
       sorter: (a: OvertimeRegistration, b: OvertimeRegistration) => (a.employee_name || '').localeCompare(b.employee_name || ''),
       render: (v: string | null) => v || '-',
     },
-    { title: 'Phòng ban', dataIndex: 'department_name', key: 'department_name', width: 140,
+    {
+      title: 'Phòng ban',
+      dataIndex: 'department_name',
+      key: 'department_name',
+      width: 140,
       render: (v: string | null) => v || '-',
     },
-    { title: 'Giờ bắt đầu', dataIndex: 'start_time', key: 'start_time', width: 120,
-      render: (v: string | null) => v ? v.substring(0, 5) : '-',
+    {
+      title: 'Giờ bắt đầu',
+      dataIndex: 'start_time',
+      key: 'start_time',
+      width: 120,
+      render: (v: string | null) => (
+        v ? (
+          <Tag style={{ borderRadius: 6, fontWeight: 600, background: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' }}>
+            {v.substring(0, 5)}
+          </Tag>
+        ) : '-'
+      ),
     },
-    { title: 'Giờ kết thúc', dataIndex: 'end_time', key: 'end_time', width: 120,
-      render: (v: string | null) => v ? v.substring(0, 5) : '-',
+    {
+      title: 'Giờ kết thúc',
+      dataIndex: 'end_time',
+      key: 'end_time',
+      width: 120,
+      render: (v: string | null) => (
+        v ? (
+          <Tag style={{ borderRadius: 6, fontWeight: 600, background: '#fff7ed', color: '#ea580c', border: '1px solid #fdba74' }}>
+            {v.substring(0, 5)}
+          </Tag>
+        ) : '-'
+      ),
     },
-    { title: 'Số giờ', dataIndex: 'total_hours', key: 'total_hours', width: 80,
-      render: (v: number | null) => v ?? '-',
+    {
+      title: 'Số giờ',
+      dataIndex: 'total_hours',
+      key: 'total_hours',
+      width: 100,
+      sorter: (a: OvertimeRegistration, b: OvertimeRegistration) => (a.total_hours || 0) - (b.total_hours || 0),
+      render: (v: number | null) => (
+        v != null ? (
+          <Tag
+            style={{
+              background: 'linear-gradient(135deg, #ea580c 0%, #f97316 100%)',
+              color: '#fff',
+              fontWeight: 700,
+              borderRadius: 6,
+              border: 'none',
+              boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
+              padding: '1px 8px',
+            }}
+          >
+            {v}h OT
+          </Tag>
+        ) : '-'
+      ),
     },
-    { title: 'Lý do', dataIndex: 'reason', key: 'reason', width: 200, ellipsis: true,
+    {
+      title: 'Lý do',
+      dataIndex: 'reason',
+      key: 'reason',
+      width: 200,
+      ellipsis: true,
       render: (v: string | null) => v || '-',
     },
-    { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 100,
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      width: 110,
       filters: Object.entries(STATUS_LABELS).map(([value, text]) => ({ text, value })),
       onFilter: (value: any, record: OvertimeRegistration) => record.status === value,
-      render: (v: string) => <Tag color={STATUS_COLORS[v]}>{STATUS_LABELS[v] || v}</Tag>,
+      render: (v: string) => <Tag color={STATUS_COLORS[v]} style={{ fontWeight: 600 }}>{STATUS_LABELS[v] || v}</Tag>,
     },
   ], []);
 

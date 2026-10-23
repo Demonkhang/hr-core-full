@@ -5,7 +5,7 @@ import {
   Button, message, Tabs, Tag, Descriptions, Spin, Space,
 } from 'antd';
 import {
-  ArrowLeftOutlined, DollarOutlined, ReadOutlined, SolutionOutlined,
+  ArrowLeftOutlined, DollarOutlined, ReadOutlined, SolutionOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { employeeService } from '@/services/employeeService';
 import { jobPositionService } from '@/services/jobPositionService';
@@ -15,6 +15,7 @@ import { ERROR_MESSAGES } from '@/utils/constants';
 import { useSetPageTitle } from '@/components/Layout/AppLayout';
 import { SalaryTab } from './SalaryTab';
 import { QualificationsTab } from './QualificationsTab';
+import { ContractsTab } from './ContractsTab';
 
 export function EmployeeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -111,6 +112,11 @@ export function EmployeeDetail() {
         defaultActiveKey="salary"
         items={[
           {
+            key: 'contracts',
+            label: <span><FileTextOutlined /> Hợp đồng lao động</span>,
+            children: <ContractsTab employeeId={id!} />,
+          },
+          {
             key: 'salary',
             label: <span><DollarOutlined /> Quá trình lương</span>,
             children: <SalaryTab employeeId={id!} />,
@@ -120,8 +126,8 @@ export function EmployeeDetail() {
             label: <span><ReadOutlined /> Trình độ chuyên môn</span>,
             children: <QualificationsTab employeeId={id!} />,
           },
-
         ]}
+
       />
     </div>
   );

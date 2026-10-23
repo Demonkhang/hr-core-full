@@ -26,11 +26,11 @@ async def main():
         for ot in ots:
             print(f'  OT: id={ot.id}, emp_id={ot.employee_id}, date={ot.date}, start={ot.start_time}, end={ot.end_time}, hours={ot.total_hours}, status={ot.status}')
 
-        res = await db.execute(select(Schedule))
+        res = await db.execute(select(Schedule).where(Schedule.employee_id == '78b5513f-2dca-4319-9f95-7bfbc96d8232'))
         scs = res.scalars().all()
-        print('=== Schedules:', len(scs))
+        print('=== Khang Doan Schedules:', len(scs))
         for sc in scs:
-            print(f'  SC: id={sc.id}, emp_id={sc.employee_id}, date={sc.date}, shift_id={sc.shift_template_id}, wp_id={sc.workplace_id}, status={sc.status}, is_ot={sc.is_overtime}')
+            print(f'  Date={sc.date}, shift_id={sc.shift_template_id}, start={sc.actual_start_time}, end={sc.actual_end_time}, hours={sc.total_hours}, status={sc.status}')
 
 if __name__ == '__main__':
     asyncio.run(main())

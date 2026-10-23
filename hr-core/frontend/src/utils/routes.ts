@@ -22,4 +22,6 @@ export const ROUTES = {
   PROFILE: '/profile',
   AUDIT_LOGS: '/audit-logs',
   BASE_SALARY_CONFIG: '/base-salary-config',
+  CONTRACTS: '/contracts',
 };
+

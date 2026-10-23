@@ -115,6 +115,11 @@ export function ScheduleModal({
               <Typography.Text strong style={{ textDecoration: s.status === SCHEDULE_STATUS.CANCELLED ? 'line-through' : 'none' }}>
                 {s.employee_name}
               </Typography.Text>
+              {s.is_overtime && (
+                <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>
+                  Tăng ca
+                </Tag>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <Typography.Text type="secondary" style={{ fontSize: 12, textDecoration: s.status === SCHEDULE_STATUS.CANCELLED ? 'line-through' : 'none' }}>

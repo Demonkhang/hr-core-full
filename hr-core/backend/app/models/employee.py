@@ -35,3 +35,4 @@ class Employee(Base, UUIDMixin, TimestampMixin):
     job_position = relationship("JobPosition", back_populates="employees")
     salary_history = relationship("SalaryHistory", back_populates="employee", cascade="all")
     trainings = relationship("Training", back_populates="employee", cascade="all")
+    contracts = relationship("Contract", back_populates="employee", cascade="all, delete-orphan", order_by="Contract.start_date.desc()")

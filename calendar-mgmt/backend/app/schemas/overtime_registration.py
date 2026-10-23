@@ -13,6 +13,8 @@ class OvertimeRegistrationCreate(BaseModel):
 
 
 class OvertimeRegistrationUpdate(BaseModel):
+    employee_id: Optional[str] = None
+    date: Optional[date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     total_hours: Optional[float] = None

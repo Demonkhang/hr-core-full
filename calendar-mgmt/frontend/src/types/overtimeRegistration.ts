@@ -27,8 +27,11 @@ export interface OvertimeRegistrationCreate {
 }
 
 export interface OvertimeRegistrationUpdate {
+  employee_id?: string;
+  date?: string;
   start_time?: string;
   end_time?: string;
   total_hours?: number;
   reason?: string;
 }
+

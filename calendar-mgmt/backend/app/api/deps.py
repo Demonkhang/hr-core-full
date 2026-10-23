@@ -64,7 +64,10 @@ async def get_current_permissions(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    is_super_admin = current_user.get("is_super_admin", False)
+    is_super_admin = bool(
+        current_user.get("is_super_admin", False)
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+    )
     
     hr_permissions = current_user.get("permissions") or current_user.get("position") or {}
     scope = hr_permissions.get("scope", SCOPE_SELF) if not is_super_admin else SCOPE_ORGANIZATION

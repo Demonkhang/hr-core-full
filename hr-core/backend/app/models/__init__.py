@@ -10,3 +10,6 @@ from app.models.job_position import JobPosition
 from app.models.salary_history import SalaryHistory, BaseSalaryConfig
 from app.models.shift_rate_config import ShiftRateConfig
 from app.models.training import Training
+from app.models.contract import Contract, ContractAppendix, ContractType, ContractStatus, ContractAppendixChangeType
+
+

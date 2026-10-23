@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Empty, Select, Modal, Button, Space, message, Collapse, Tag, Typography, DatePicker, Segmented, Tooltip } from 'antd';
-import { LeftOutlined, RightOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
+import { LeftOutlined, RightOutlined, LockOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getSchedulesForDate } from '@/utils/scheduleHelpers';
-import { DATE_FORMATS, MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, SCOPE } from '@/utils/constants';
+import { DATE_FORMATS, MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, SCOPE, ROUTES } from '@/utils/constants';
 import { scheduleService } from '@/services/scheduleService';
 import { employeeService } from '@/services/employeeService';
 import { useAuthStore } from '@/store/authStore';
@@ -41,6 +42,7 @@ function pct(minutes: number) {
 }
 
 export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates, workplaces, calendarData, meetingData, onRefresh, selectedDept, setSelectedDept, onDateChange, departments, deptLocked, onRegisterClick }: ScheduleSidebarProps) {
+  const navigate = useNavigate();
   const [assigning, setAssigning] = useState<{ wpId: string; stId: string; stName: string; deptIds: string[] } | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
@@ -157,13 +159,23 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
           const endM = toMin(st.end_time);
           const schedules = scheduleByTemplate.get(st.id) || [];
           const filled = assignedIds.has(st.id) && schedules.length > 0;
-          const name = filled ? schedules.map((s) => allEmployees.find((e) => e.id === s.employee_id)?.full_name || '').filter(Boolean).join(', ') : '';
+          const isOvertimeShift = filled && schedules.every((s) => s.is_overtime);
+          const barColor = isOvertimeShift ? '#ea580c' : st.color;
+          const name = filled
+            ? schedules
+                .map((s) => {
+                  const empName = allEmployees.find((e) => e.id === s.employee_id)?.full_name || '';
+                  return s.is_overtime ? `${empName} (Tăng ca)` : empName;
+                })
+                .filter(Boolean)
+                .join(', ')
+            : '';
           const label = filled ? `${st.name}: ${name}` : st.name;
 
           if (st.is_overnight || endM <= startM) {
-            bars.push({ left: pct(startM), w: pct(MIN - startM), c: st.color, label: `${label} →`, filled, s: startM, e: MIN, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: false });
+            bars.push({ left: pct(startM), w: pct(MIN - startM), c: barColor, label: `${label} →`, filled, s: startM, e: MIN, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: false });
           } else {
-            bars.push({ left: pct(startM), w: pct(endM - startM), c: st.color, label, filled, s: startM, e: endM, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: false });
+            bars.push({ left: pct(startM), w: pct(endM - startM), c: barColor, label, filled, s: startM, e: endM, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: false });
           }
         }
         const contBars: Bar[] = [];
@@ -172,9 +184,19 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
           if (!st.is_overnight && endM > toMin(st.start_time)) continue;
           const prevSchedules = prevSch.filter((s) => s.shift_template_id === st.id && s.workplace_id === wp.id && s.status !== 'cancelled');
           const contFilled = prevSchedules.length > 0;
-          const prevName = contFilled ? prevSchedules.map((s) => allEmployees.find((e) => e.id === s.employee_id)?.full_name || '').filter(Boolean).join(', ') : '';
+          const isPrevOvertime = contFilled && prevSchedules.every((s) => s.is_overtime);
+          const prevBarColor = isPrevOvertime ? '#ea580c' : st.color;
+          const prevName = contFilled
+            ? prevSchedules
+                .map((s) => {
+                  const empName = allEmployees.find((e) => e.id === s.employee_id)?.full_name || '';
+                  return s.is_overtime ? `${empName} (Tăng ca)` : empName;
+                })
+                .filter(Boolean)
+                .join(', ')
+            : '';
           const contLabel = contFilled ? `${st.name} (tt): ${prevName}` : st.name;
-          contBars.push({ left: 0, w: pct(endM), c: st.color, label: contLabel, filled: contFilled, s: 0, e: endM, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: true });
+          contBars.push({ left: 0, w: pct(endM), c: prevBarColor, label: contLabel, filled: contFilled, s: 0, e: endM, stId: st.id, stName: st.name, deptIds: st.department_ids, lane: -1, isCont: true });
         }
 
         const allBars = [...bars, ...contBars];
@@ -336,6 +358,14 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
               Đăng ký lịch
             </Button>
           )}
+          <Button
+            size="small"
+            icon={<UserOutlined style={{ color: '#ec4899' }} />}
+            onClick={() => navigate(ROUTES.SCHEDULES_BY_EMPLOYEE)}
+            style={{ borderRadius: 6, fontWeight: 500 }}
+          >
+            Xem theo người
+          </Button>
           {sortedWps.length > 0 && (
             <Segmented
               value={activeTab}

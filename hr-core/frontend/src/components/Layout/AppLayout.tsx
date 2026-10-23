@@ -15,9 +15,11 @@ import {
   UserOutlined,
   DollarOutlined,
   TableOutlined,
+  FileTextOutlined,
   SunOutlined,
   MoonOutlined,
 } from '@ant-design/icons';
+
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/context/ThemeContext';
@@ -54,6 +56,7 @@ function buildMenuItems(perms: any): any[] {
       children: [
         { key: ROUTES.EMPLOYEES, icon: <TeamOutlined />, label: 'Nhân sự hiện có' },
         { key: ROUTES.EMPLOYEES_INACTIVE, icon: <TeamOutlined />, label: 'Nhân sự đã nghỉ' },
+        { key: ROUTES.CONTRACTS, icon: <FileTextOutlined />, label: 'Hợp đồng lao động' },
       ],
     });
   }
@@ -77,6 +80,7 @@ const pageTitleMap: Record<string, string> = {
   [ROUTES.HOME]: 'Tổng quan',
   [ROUTES.EMPLOYEES]: 'Nhân sự hiện có',
   [ROUTES.EMPLOYEES_INACTIVE]: 'Nhân sự đã nghỉ',
+  [ROUTES.CONTRACTS]: 'Hợp đồng lao động',
   [ROUTES.DEPARTMENTS]: 'Phòng ban',
   [ROUTES.POSITIONS]: 'Chức vụ',
   [ROUTES.JOB_POSITIONS]: 'Vị trí việc làm',
@@ -85,6 +89,7 @@ const pageTitleMap: Record<string, string> = {
   [ROUTES.AUDIT_LOGS]: 'Nhật ký hoạt động',
   [ROUTES.BASE_SALARY_CONFIG]: 'Cấu hình lương',
 };
+
 
 const PageTitleCtx = createContext<{ setPageTitle: (t: string) => void }>({ setPageTitle: () => {} });
 

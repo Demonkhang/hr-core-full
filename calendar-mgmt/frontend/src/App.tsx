@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/components/Common/ErrorBoundary';
 import { LoginPage } from '@/pages/LoginPage';
 import { Dashboard } from '@/pages/Dashboard';
 import { SchedulePage } from '@/pages/Schedules/SchedulePage';
+import { EmployeeSchedulePage } from '@/pages/Schedules/EmployeeSchedulePage';
 import { ScheduleApproval } from '@/pages/Schedules/ScheduleApproval';
 import { ShiftTemplateList } from '@/pages/ShiftTemplates/ShiftTemplateList';
 import { LeaveRegistrationList } from '@/pages/LeaveRegistrations/LeaveRegistrationList';
@@ -54,6 +55,16 @@ function App() {
           <ProtectedRoute>
             <AppLayout>
               <SchedulePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.SCHEDULES_BY_EMPLOYEE}
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <EmployeeSchedulePage />
             </AppLayout>
           </ProtectedRoute>
         }

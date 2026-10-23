@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Spin, Typography, Row, Select, DatePicker, Empty, message } from 'antd';
+import { Spin, Typography, Row, Select, DatePicker, message } from 'antd';
 import { SafeCol } from '@/components/Common/SafeCol';
 import dayjs from 'dayjs';
 import { useAuthStore } from '@/store/authStore';
@@ -9,7 +9,7 @@ import { StatsCardGrid } from '@/components/Dashboard/StatsCardGrid';
 import { StatusPieChart } from '@/components/Dashboard/StatusPieChart';
 import { MonthlyTrendChart } from '@/components/Dashboard/MonthlyTrendChart';
 import { OvertimeBarChart } from '@/components/Dashboard/OvertimeBarChart';
-import type { DashboardData, OvertimeByDepartment } from '@/types/dashboard';
+import type { DashboardData } from '@/types/dashboard';
 import type { Department } from '@/types/department';
 
 export function Dashboard() {
@@ -21,7 +21,10 @@ export function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState<string>(dayjs().format('YYYY-MM'));
 
   useEffect(() => {
-    departmentService.list(true).then(setDepartments).catch(() => console.warn('Failed to load departments for filter'));
+    departmentService
+      .list(true)
+      .then(setDepartments)
+      .catch(() => console.warn('Failed to load departments for filter'));
   }, []);
 
   useEffect(() => {
@@ -45,8 +48,6 @@ export function Dashboard() {
   if (loading && !data) {
     return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   }
-
-  const otByDept: OvertimeByDepartment[] = data?.overtime_by_department ?? [];
 
   return (
     <div>
@@ -77,18 +78,16 @@ export function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <SafeCol xs={24} lg={12}>
-          {data?.schedule_by_status ? <StatusPieChart data={data.schedule_by_status} /> : <Empty description="Không có dữ liệu lịch trực" />}
+          <StatusPieChart data={data?.schedule_by_status} />
         </SafeCol>
         <SafeCol xs={24} lg={12}>
-          {otByDept.length > 0 ? <OvertimeBarChart data={otByDept} /> : <Empty description="Không có dữ liệu tăng ca" />}
+          <OvertimeBarChart data={data?.overtime_by_department} />
         </SafeCol>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <SafeCol xs={24} lg={24}>
-          {data?.monthly_trend && data.monthly_trend.length > 0
-            ? <MonthlyTrendChart data={data.monthly_trend} />
-            : <Empty description="Không có dữ liệu xu hướng" />}
+          <MonthlyTrendChart data={data?.monthly_trend} />
         </SafeCol>
       </Row>
     </div>

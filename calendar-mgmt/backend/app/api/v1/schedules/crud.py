@@ -23,6 +23,8 @@ router = APIRouter()
 
 
 def _schedule_to_response(s: Schedule, emp: dict = None, shift: dict = None, workplace_name: str = None, department_name: str = None) -> ScheduleResponse:
+    shift_start = shift.get("start_time") if shift else None
+    shift_end = shift.get("end_time") if shift else None
     return ScheduleResponse(
         id=str(s.id),
         employee_id=str(s.employee_id),
@@ -30,8 +32,8 @@ def _schedule_to_response(s: Schedule, emp: dict = None, shift: dict = None, wor
         workplace_id=str(s.workplace_id) if s.workplace_id else None,
         date=s.date,
         status=s.status.value if s.status else "draft",
-        actual_start_time=s.actual_start_time,
-        actual_end_time=s.actual_end_time,
+        actual_start_time=s.actual_start_time or shift_start,
+        actual_end_time=s.actual_end_time or shift_end,
         total_hours=s.total_hours,
         is_overtime=s.is_overtime,
         is_overtime_approved=s.is_overtime_approved,
@@ -43,6 +45,8 @@ def _schedule_to_response(s: Schedule, emp: dict = None, shift: dict = None, wor
         employee_name=emp.get("full_name") if emp else None,
         shift_name=shift.get("name") if shift else None,
         shift_color=shift.get("color") if shift else None,
+        shift_start_time=shift_start,
+        shift_end_time=shift_end,
         workplace_name=workplace_name,
         department_name=department_name,
         created_at=s.created_at,
@@ -119,8 +123,12 @@ async def list_schedules(
         _schedule_to_response(
             s,
             emp=emp_map.get(str(s.employee_id)),
-            shift={"name": shift_map.get(str(s.shift_template_id), None) and shift_map[str(s.shift_template_id)].name,
-                   "color": shift_map.get(str(s.shift_template_id), None) and shift_map[str(s.shift_template_id)].color}
+            shift={
+                "name": shift_map[str(s.shift_template_id)].name,
+                "color": shift_map[str(s.shift_template_id)].color,
+                "start_time": shift_map[str(s.shift_template_id)].start_time,
+                "end_time": shift_map[str(s.shift_template_id)].end_time,
+            }
             if str(s.shift_template_id) in shift_map else None,
             workplace_name=wp_map.get(str(s.workplace_id)) if s.workplace_id else None,
             department_name=emp_map.get(str(s.employee_id), {}).get("department_name") if emp_map.get(str(s.employee_id)) else None,
@@ -152,7 +160,14 @@ async def get_schedule(
         wp = await hr_client.get_workplace(str(s.workplace_id), token=auth_token)
         wp_name = wp.get("name") if wp else None
     return _schedule_to_response(
-        s, emp=emp, shift={"name": shift.name, "color": shift.color} if shift else None,
+        s,
+        emp=emp,
+        shift={
+            "name": shift.name,
+            "color": shift.color,
+            "start_time": shift.start_time,
+            "end_time": shift.end_time,
+        } if shift else None,
         workplace_name=wp_name,
         department_name=emp.get("department_name") if emp else None,
     )

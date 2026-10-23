@@ -37,7 +37,15 @@ export const API_ENDPOINTS = {
   EMPLOYEE_QUALIFICATION_ITEM: (empId: string, recordId: string) => `/employees/${empId}/qualifications/${recordId}`,
   AUDIT_LOGS: '/audit-logs',
   AUDIT_LOG: (id: string) => `/audit-logs/${id}`,
-  AUDIT_LOGS_STATS: '/audit-logs/stats',
   BASE_SALARY_CONFIG: '/base-salary-config',
   BASE_SALARY_CONFIG_ITEM: (id: string) => `/base-salary-config/${id}`,
+  CONTRACTS: '/contracts',
+  CONTRACT: (id: string) => `/contracts/${id}`,
+  CONTRACT_RENEW: (id: string) => `/contracts/${id}/renew`,
+  CONTRACT_TERMINATE: (id: string) => `/contracts/${id}/terminate`,
+  CONTRACT_DASHBOARD_SUMMARY: '/contracts/dashboard-summary',
+  CONTRACT_APPENDICES: (id: string) => `/contracts/${id}/appendices`,
+  CONTRACT_APPENDIX: (id: string, appendixId: string) => `/contracts/${id}/appendices/${appendixId}`,
+  CONTRACT_UPLOAD_ATTACHMENT: '/contracts/upload-attachment',
 };
+

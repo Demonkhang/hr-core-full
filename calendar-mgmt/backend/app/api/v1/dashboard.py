@@ -26,11 +26,12 @@ async def get_dashboard(
         except ValueError:
             raise ValidationError(detail="Định dạng tháng không hợp lệ. Sử dụng YYYY-MM")
 
-    stats = await dashboard_service.get_dashboard_stats(db, month=month_date, department_ids=department_id)
-    dist = await dashboard_service.get_department_distribution(db, department_ids=department_id)
-    trend = await dashboard_service.get_monthly_trend(db, month=month_date, department_ids=department_id)
-    sched_status = await dashboard_service.get_schedule_by_status(db, month=month_date, department_ids=department_id)
-    ot_dept = await dashboard_service.get_overtime_by_department(db, month=month_date, department_ids=department_id)
+    token = current_user.get("_token", "")
+    stats = await dashboard_service.get_dashboard_stats(db, month=month_date, department_ids=department_id, token=token)
+    dist = await dashboard_service.get_department_distribution(db, department_ids=department_id, token=token)
+    trend = await dashboard_service.get_monthly_trend(db, month=month_date, department_ids=department_id, token=token)
+    sched_status = await dashboard_service.get_schedule_by_status(db, month=month_date, department_ids=department_id, token=token)
+    ot_dept = await dashboard_service.get_overtime_by_department(db, month=month_date, department_ids=department_id, token=token)
 
     return {
         "stats": stats,

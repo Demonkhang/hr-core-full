@@ -57,6 +57,7 @@ function buildMenuItems(user: any) {
           popupClassName: popupClass,
           children: [
             { key: ROUTES.SCHEDULES, icon: <ScheduleOutlined style={iconStyle('#a78bfa')} />, label: 'Lịch trực' },
+            { key: ROUTES.SCHEDULES_BY_EMPLOYEE, icon: <UserOutlined style={iconStyle('#ec4899')} />, label: 'Xem theo người' },
             { key: ROUTES.SCHEDULES_APPROVAL, icon: <CheckCircleOutlined style={iconStyle('#34d399')} />, label: 'Phê duyệt' },
             { key: ROUTES.REPORTS_DEPT_SCHEDULE, icon: <TableOutlined style={iconStyle('#60a5fa')} />, label: 'Thống kê' },
           ],
@@ -109,6 +110,7 @@ function buildMenuItems(user: any) {
 const pageTitles: Record<string, string> = {
   [ROUTES.HOME]: 'Tổng quan',
   [ROUTES.SCHEDULES]: 'Lịch trực',
+  [ROUTES.SCHEDULES_BY_EMPLOYEE]: 'Lịch trực theo nhân viên',
   [ROUTES.SCHEDULES_APPROVAL]: 'Phê duyệt lịch trực',
   [ROUTES.SHIFT_TEMPLATES]: 'Quản lý ca trực mẫu',
   [ROUTES.OVERTIME_REGISTRATIONS]: 'Đăng ký thêm giờ',

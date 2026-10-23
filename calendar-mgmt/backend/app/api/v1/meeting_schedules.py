@@ -3,9 +3,8 @@ from typing import Optional, List
 from datetime import datetime, timezone, date
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from app.database import get_db
 from app.api.deps import get_current_user, get_current_permissions, RequirePermission
 from app.schemas.meeting_schedule import (
@@ -15,8 +14,44 @@ from app.models.meeting_schedule import MeetingSchedule, MeetingStatus
 from app.models.meeting_participant import MeetingParticipant
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 from app.clients.hr_client import hr_client
+from app.services.notification_service import create_notification
 
 logger = logging.getLogger(__name__)
+
+
+async def _notify_meeting_participants(
+    db: AsyncSession,
+    meeting: MeetingSchedule,
+    title: str,
+    message: str,
+    participant_ids: list[str] | None = None,
+):
+    """Gửi thông báo đến tất cả nhân viên tham gia cuộc họp và người tạo."""
+    target_ids = set()
+    if participant_ids:
+        target_ids.update(str(p) for p in participant_ids)
+    else:
+        parts_res = await db.execute(
+            select(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting.id)
+        )
+        target_ids.update(str(p.employee_id) for p in parts_res.scalars().all())
+
+    # Đồng thời gửi thông báo cho người tạo nếu có
+    if meeting.created_by_id:
+        target_ids.add(str(meeting.created_by_id))
+
+    for emp_id in target_ids:
+        try:
+            await create_notification(
+                db=db,
+                employee_id=emp_id,
+                title=title,
+                message=message,
+                type="meeting",
+                schedule_id=None,
+            )
+        except Exception as e:
+            logger.error(f"Error creating notification for participant {emp_id}: {e}")
 
 class BulkApproveRequest(BaseModel):
     meeting_ids: list[str]
@@ -67,6 +102,17 @@ async def list_meeting_schedules(
         query = query.where(MeetingSchedule.date <= date_to)
     if department_id:
         query = query.where(MeetingSchedule.department_id.in_(department_id))
+    if employee_id:
+        query = query.where(
+            or_(
+                MeetingSchedule.created_by_id == employee_id,
+                MeetingSchedule.id.in_(
+                    select(MeetingParticipant.meeting_id).where(
+                        MeetingParticipant.employee_id == employee_id
+                    )
+                ),
+            )
+        )
 
     query = query.order_by(MeetingSchedule.date.desc(), MeetingSchedule.start_time.desc())
     result = await db.execute(query)
@@ -199,6 +245,15 @@ async def create_meeting_schedule(
     current_user: dict = Depends(get_current_user),
     perms: dict = Depends(RequirePermission('can_manage_meetings')),
 ):
+    is_admin_or_approver = bool(
+        current_user.get("is_super_admin")
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+        or perms.get("can_approve_meetings")
+    )
+    initial_status = MeetingStatus.APPROVED if is_admin_or_approver else MeetingStatus.PENDING
+    approved_by = current_user.get("id") if is_admin_or_approver else None
+    approved_at = datetime.now(timezone.utc) if is_admin_or_approver else None
+
     meeting = MeetingSchedule(
         title=body.title,
         meeting_type=body.meeting_type,
@@ -208,7 +263,9 @@ async def create_meeting_schedule(
         description=body.description,
         department_id=body.department_id,
         created_by_id=current_user.get("id"),
-        status=MeetingStatus.PENDING,
+        status=initial_status,
+        approved_by_id=approved_by,
+        approved_at=approved_at,
     )
     db.add(meeting)
     await db.flush()
@@ -220,6 +277,18 @@ async def create_meeting_schedule(
                 employee_id=emp_id,
             )
             db.add(participant)
+    await db.flush()
+
+    date_str = meeting.date.strftime("%d/%m/%Y")
+    time_str = meeting.start_time.strftime("%H:%M")
+    loc_str = f" tại {meeting.location}" if meeting.location else ""
+    await _notify_meeting_participants(
+        db=db,
+        meeting=meeting,
+        title=f"Lịch họp mới: {meeting.title}",
+        message=f"Bạn được mời tham gia lịch họp '{meeting.title}' vào lúc {time_str} ngày {date_str}{loc_str}.",
+        participant_ids=body.participant_ids,
+    )
     await db.commit()
 
     parts_result = await db.execute(
@@ -259,9 +328,9 @@ async def create_meeting_schedule(
         "created_by_id": str(meeting.created_by_id) if meeting.created_by_id else None,
         "created_by_name": None,
         "status": meeting.status,
-        "approved_by_id": None,
-        "approved_by_name": None,
-        "approved_at": None,
+        "approved_by_id": str(meeting.approved_by_id) if meeting.approved_by_id else None,
+        "approved_by_name": current_user.get("full_name") if is_admin_or_approver else None,
+        "approved_at": meeting.approved_at,
         "rejection_reason": None,
         "is_active": meeting.is_active,
         "participants": parts_list,
@@ -280,7 +349,15 @@ async def update_meeting_schedule(
     perms: dict = Depends(RequirePermission('can_manage_meetings')),
 ):
     meeting = await _get_meeting(meeting_id, db)
-    if meeting.status != MeetingStatus.PENDING:
+    if meeting.status == MeetingStatus.CANCELLED:
+        raise BadRequestError(detail="Không thể sửa lịch họp đã bị hủy")
+
+    is_admin_or_approver = bool(
+        current_user.get("is_super_admin")
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+        or perms.get("can_approve_meetings")
+    )
+    if not is_admin_or_approver and meeting.status != MeetingStatus.PENDING:
         raise BadRequestError(detail="Chỉ có thể sửa lịch họp khi đang ở trạng thái chờ duyệt")
 
     update_data = body.model_dump(exclude_unset=True, exclude={"participant_ids"})
@@ -302,6 +379,13 @@ async def update_meeting_schedule(
             )
             db.add(participant)
 
+    await _notify_meeting_participants(
+        db=db,
+        meeting=meeting,
+        title=f"Cập nhật lịch họp: {meeting.title}",
+        message=f"Thông tin lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} đã được cập nhật.",
+        participant_ids=body.participant_ids,
+    )
     await db.commit()
     return {"message": "Đã cập nhật lịch họp"}
 
@@ -316,6 +400,12 @@ async def delete_meeting_schedule(
     meeting = await _get_meeting(meeting_id, db)
     meeting.status = MeetingStatus.CANCELLED
     meeting.is_active = False
+    await _notify_meeting_participants(
+        db=db,
+        meeting=meeting,
+        title=f"Hủy lịch họp: {meeting.title}",
+        message=f"Lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} đã bị hủy.",
+    )
     await db.commit()
     return {"message": "Đã huỷ lịch họp"}
 
@@ -334,7 +424,13 @@ async def approve_meeting_schedule(
     meeting.status = MeetingStatus.APPROVED
     meeting.approved_by_id = current_user.get("id")
     meeting.approved_at = datetime.now(timezone.utc)
-    await db.flush()
+    await _notify_meeting_participants(
+        db=db,
+        meeting=meeting,
+        title=f"Lịch họp được phê duyệt: {meeting.title}",
+        message=f"Lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} lúc {meeting.start_time.strftime('%H:%M')} đã được phê duyệt.",
+    )
+    await db.commit()
     return {"message": "Đã duyệt lịch họp"}
 
 
@@ -354,7 +450,13 @@ async def reject_meeting_schedule(
     meeting.rejection_reason = reason
     meeting.approved_by_id = current_user.get("id")
     meeting.approved_at = datetime.now(timezone.utc)
-    await db.flush()
+    await _notify_meeting_participants(
+        db=db,
+        meeting=meeting,
+        title=f"Lịch họp bị từ chối: {meeting.title}",
+        message=f"Lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} đã bị từ chối. Lý do: {reason}",
+    )
+    await db.commit()
     return {"message": "Đã từ chối lịch họp"}
 
 
@@ -378,6 +480,12 @@ async def bulk_approve_meetings(
         meeting.status = MeetingStatus.APPROVED
         meeting.approved_by_id = current_user.get("id")
         meeting.approved_at = datetime.now(timezone.utc)
+        await _notify_meeting_participants(
+            db=db,
+            meeting=meeting,
+            title=f"Lịch họp được phê duyệt: {meeting.title}",
+            message=f"Lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} đã được phê duyệt.",
+        )
         approved.append(mid)
     await db.commit()
     return {
@@ -408,6 +516,12 @@ async def bulk_reject_meetings(
         meeting.rejection_reason = body.reason
         meeting.approved_by_id = current_user.get("id")
         meeting.approved_at = datetime.now(timezone.utc)
+        await _notify_meeting_participants(
+            db=db,
+            meeting=meeting,
+            title=f"Lịch họp bị từ chối: {meeting.title}",
+            message=f"Lịch họp '{meeting.title}' ngày {meeting.date.strftime('%d/%m/%Y')} đã bị từ chối. Lý do: {body.reason}",
+        )
         rejected.append(mid)
     await db.commit()
     return {

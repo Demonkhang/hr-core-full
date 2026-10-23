@@ -15,9 +15,11 @@ import { WorkplaceList } from '@/pages/Workplaces/WorkplaceList';
 import { PositionList } from '@/pages/Positions/PositionList';
 import { JobPositionList } from '@/pages/JobPositions/JobPositionList';
 import { UserList } from '@/pages/Users/UserList';
-
 import { WorkplaceDetail } from '@/pages/Workplaces/WorkplaceDetail';
 import { AuditLogList } from '@/pages/Audit/AuditLogList';
+import { ContractList } from '@/pages/Contracts/ContractList';
+
+
 import { ROUTES } from '@/utils/constants';
 
 function App() {
@@ -80,7 +82,18 @@ function App() {
         }
       />
       <Route
+        path={ROUTES.CONTRACTS}
+        element={
+          <PermissionRoute permissions={['can_manage_employees']}>
+            <AppLayout>
+              <ContractList />
+            </AppLayout>
+          </PermissionRoute>
+        }
+      />
+      <Route
         path={ROUTES.BASE_SALARY_CONFIG}
+
         element={
           <PermissionRoute permissions={['can_manage_settings']}>
             <AppLayout>
