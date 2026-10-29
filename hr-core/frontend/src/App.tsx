@@ -54,11 +54,11 @@ function App() {
       <Route
         path={ROUTES.EMPLOYEES}
         element={
-          <PermissionRoute permissions={['can_manage_employees']}>
+          <ProtectedRoute>
             <AppLayout>
               <EmployeeList />
             </AppLayout>
-          </PermissionRoute>
+          </ProtectedRoute>
         }
       />
       <Route
@@ -74,11 +74,11 @@ function App() {
       <Route
         path={ROUTES.EMPLOYEE_DETAIL(':id')}
         element={
-          <PermissionRoute permissions={['can_manage_employees']}>
+          <ProtectedRoute>
             <AppLayout>
               <EmployeeDetail />
             </AppLayout>
-          </PermissionRoute>
+          </ProtectedRoute>
         }
       />
       <Route

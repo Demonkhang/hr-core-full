@@ -29,80 +29,123 @@ const popupClass = 'menu-popup-solid';
 const iconStyle = (color: string) => ({ color, fontSize: 16 });
 
 function buildMenuItems(user: any) {
-  const systemSection = (user?.is_super_admin || user?.permissions?.can_manage_settings)
+  const isAdmin = Boolean(user?.is_super_admin);
+  const perms = (user?.permissions ?? {}) as Record<string, any>;
+
+  // 1. Nhóm Trực ca
+  const canReadDuty = isAdmin || Boolean(perms.can_read_schedule);
+  let dutyGroup: any = null;
+  if (canReadDuty) {
+    const dutyChildren: any[] = [
+      { key: ROUTES.SCHEDULES, icon: <ScheduleOutlined style={iconStyle('#a78bfa')} />, label: 'Lịch trực' },
+      { key: ROUTES.SCHEDULES_BY_EMPLOYEE, icon: <UserOutlined style={iconStyle('#ec4899')} />, label: 'Xem theo người' },
+    ];
+    if (isAdmin || perms.can_approve_schedule) {
+      dutyChildren.push({ key: ROUTES.SCHEDULES_APPROVAL, icon: <CheckCircleOutlined style={iconStyle('#34d399')} />, label: 'Phê duyệt' });
+    }
+    dutyChildren.push({ key: ROUTES.REPORTS_DEPT_SCHEDULE, icon: <TableOutlined style={iconStyle('#60a5fa')} />, label: 'Thống kê' });
+    dutyGroup = {
+      key: 'duty',
+      icon: <ScheduleOutlined style={iconStyle('#8b5cf6')} />,
+      label: 'Trực ca',
+      popupClassName: popupClass,
+      children: dutyChildren,
+    };
+  }
+
+  // 2. Nhóm Lịch họp
+  const canMeetings = isAdmin || Boolean(perms.can_manage_meetings) || Boolean(perms.can_approve_meetings);
+  const meetingsGroup = canMeetings
+    ? {
+        key: 'meetings',
+        icon: <CalendarOutlined style={iconStyle('#0ea5e9')} />,
+        label: 'Lịch họp',
+        popupClassName: popupClass,
+        children: [
+          { key: ROUTES.MEETING_SCHEDULES, icon: <CalendarOutlined style={iconStyle('#38bdf8')} />, label: 'Lịch họp / Đột xuất' },
+          { key: ROUTES.MEETING_SCHEDULES_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
+        ],
+      }
+    : null;
+
+  // 3. Nhóm Thêm giờ
+  const canOvertime = isAdmin || Boolean(perms.can_manage_overtime) || Boolean(perms.can_approve_overtime);
+  const overtimeGroup = canOvertime
+    ? {
+        key: 'overtime',
+        icon: <ClockCircleOutlined style={iconStyle('#f97316')} />,
+        label: 'Thêm giờ',
+        popupClassName: popupClass,
+        children: [
+          { key: ROUTES.OVERTIME_REGISTRATIONS, icon: <ClockCircleOutlined style={iconStyle('#fb923c')} />, label: 'Đăng ký thêm giờ' },
+          { key: ROUTES.OVERTIME_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
+        ],
+      }
+    : null;
+
+  // 4. Nhóm Nghỉ phép
+  const canLeave = isAdmin || Boolean(perms.can_manage_leave) || Boolean(perms.can_approve_leave);
+  const leaveGroup = canLeave
+    ? {
+        key: 'leave',
+        icon: <CalendarOutlined style={iconStyle('#10b981')} />,
+        label: 'Nghỉ phép',
+        popupClassName: popupClass,
+        children: [
+          { key: ROUTES.LEAVE_REGISTRATIONS, icon: <CalendarOutlined style={iconStyle('#34d399')} />, label: 'Đăng ký phép' },
+          { key: ROUTES.LEAVE_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
+        ],
+      }
+    : null;
+
+  // Gom các nhóm con của Lịch công tác
+  const scheduleChildren = [dutyGroup, meetingsGroup, overtimeGroup, leaveGroup].filter(Boolean);
+  const scheduleSection = scheduleChildren.length > 0
+    ? [{
+        key: 'schedules',
+        icon: <ScheduleOutlined style={iconStyle('#6366f1')} />,
+        label: 'Lịch công tác',
+        popupClassName: popupClass,
+        children: scheduleChildren,
+      }]
+    : [];
+
+  // 5. Nhóm Báo cáo
+  const reportsSection = (isAdmin || perms.can_view_reports)
+    ? [{
+        key: 'reports',
+        icon: <BarChartOutlined style={iconStyle('#ec4899')} />,
+        label: 'Báo cáo',
+        popupClassName: popupClass,
+        children: [
+          { key: ROUTES.REPORTS, icon: <BarChartOutlined style={iconStyle('#f472b6')} />, label: 'Tổng hợp giờ' },
+        ],
+      }]
+    : [];
+
+  // 6. Nhóm Hệ thống
+  const systemChildren = [];
+  if (isAdmin || perms.can_manage_settings) {
+    systemChildren.push({ key: ROUTES.SHIFT_TEMPLATES, icon: <TagsOutlined style={iconStyle('#8b5cf6')} />, label: 'Ca trực mẫu' });
+  }
+  if (isAdmin) {
+    systemChildren.push({ key: ROUTES.PERMISSIONS, icon: <SafetyOutlined style={iconStyle('#f43f5e')} />, label: 'Phân quyền' });
+  }
+
+  const systemSection = systemChildren.length > 0
     ? [{
         key: 'system',
         icon: <SettingOutlined style={iconStyle('#64748b')} />,
         label: 'Hệ thống',
         popupClassName: popupClass,
-        children: [
-          { key: ROUTES.SHIFT_TEMPLATES, icon: <TagsOutlined style={iconStyle('#8b5cf6')} />, label: 'Ca trực mẫu' },
-          { key: ROUTES.PERMISSIONS, icon: <SafetyOutlined style={iconStyle('#f43f5e')} />, label: 'Phân quyền' },
-        ],
+        children: systemChildren,
       }]
     : [];
 
   return [
     { key: ROUTES.HOME, icon: <DashboardOutlined style={iconStyle('#f59e0b')} />, label: 'Tổng quan' },
-    {
-      key: 'schedules',
-      icon: <ScheduleOutlined style={iconStyle('#6366f1')} />,
-      label: 'Lịch công tác',
-      popupClassName: popupClass,
-      children: [
-        {
-          key: 'duty',
-          icon: <ScheduleOutlined style={iconStyle('#8b5cf6')} />,
-          label: 'Trực ca',
-          popupClassName: popupClass,
-          children: [
-            { key: ROUTES.SCHEDULES, icon: <ScheduleOutlined style={iconStyle('#a78bfa')} />, label: 'Lịch trực' },
-            { key: ROUTES.SCHEDULES_BY_EMPLOYEE, icon: <UserOutlined style={iconStyle('#ec4899')} />, label: 'Xem theo người' },
-            { key: ROUTES.SCHEDULES_APPROVAL, icon: <CheckCircleOutlined style={iconStyle('#34d399')} />, label: 'Phê duyệt' },
-            { key: ROUTES.REPORTS_DEPT_SCHEDULE, icon: <TableOutlined style={iconStyle('#60a5fa')} />, label: 'Thống kê' },
-          ],
-        },
-        {
-          key: 'meetings',
-          icon: <CalendarOutlined style={iconStyle('#0ea5e9')} />,
-          label: 'Lịch họp',
-          popupClassName: popupClass,
-          children: [
-            { key: ROUTES.MEETING_SCHEDULES, icon: <CalendarOutlined style={iconStyle('#38bdf8')} />, label: 'Lịch họp / Đột xuất' },
-            { key: ROUTES.MEETING_SCHEDULES_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
-          ],
-        },
-        {
-          key: 'overtime',
-          icon: <ClockCircleOutlined style={iconStyle('#f97316')} />,
-          label: 'Thêm giờ',
-          popupClassName: popupClass,
-          children: [
-            { key: ROUTES.OVERTIME_REGISTRATIONS, icon: <ClockCircleOutlined style={iconStyle('#fb923c')} />, label: 'Đăng ký thêm giờ' },
-            { key: ROUTES.OVERTIME_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
-          ],
-        },
-        {
-          key: 'leave',
-          icon: <CalendarOutlined style={iconStyle('#10b981')} />,
-          label: 'Nghỉ phép',
-          popupClassName: popupClass,
-          children: [
-            { key: ROUTES.LEAVE_REGISTRATIONS, icon: <CalendarOutlined style={iconStyle('#34d399')} />, label: 'Đăng ký phép' },
-            { key: ROUTES.LEAVE_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
-          ],
-        },
-      ],
-    },
-    {
-      key: 'reports',
-      icon: <BarChartOutlined style={iconStyle('#ec4899')} />,
-      label: 'Báo cáo',
-      popupClassName: popupClass,
-      children: [
-        { key: ROUTES.REPORTS, icon: <BarChartOutlined style={iconStyle('#f472b6')} />, label: 'Tổng hợp giờ' },
-      ],
-    },
+    ...scheduleSection,
+    ...reportsSection,
     ...systemSection,
   ];
 }

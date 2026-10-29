@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { Button, Input, InputRef, Select, Tag, message, Space, Tooltip, Checkbox, DatePicker, Modal, Form } from 'antd';
 import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined, CheckOutlined, CloseOutlined, UserOutlined, KeyOutlined } from '@ant-design/icons';
@@ -20,11 +20,15 @@ import { useNavigate } from 'react-router-dom';
 import { AccountModal } from '@/components/Employees/AccountModal';
 import { ImportModal } from '@/components/Employees/ImportModal';
 import { useSetPageTitle } from '@/components/Layout/AppLayout';
+import { useAuthStore } from '@/store/authStore';
 import apiClient from '@/services/apiClient';
 import { API_ENDPOINTS } from '@/utils/apiEndpoints';
 
 export function EmployeeList() {
-  useSetPageTitle('Nhân sự hiện có');
+  const user = useAuthStore((s) => s.user);
+  const canManage = Boolean(user?.is_super_admin || user?.permissions?.can_manage_employees);
+
+  useSetPageTitle(canManage ? 'Nhân sự hiện có' : 'Danh bạ nhân sự');
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingKey, setEditingKey] = useState<string>('');
   const [addingNew, setAddingNew] = useState(false);
@@ -427,12 +431,16 @@ export function EmployeeList() {
     },
   ];
 
+  const displayColumns = useMemo(() => {
+    return canManage ? columns : columns.filter((c) => c.key !== 'actions');
+  }, [columns, canManage]);
+
   return (
     <div>
       <EmployeeTable
         activeOnly
-        title="Nhân sự hiện có"
-        columns={columns}
+        title={canManage ? 'Nhân sự hiện có' : 'Danh bạ nhân sự'}
+        columns={displayColumns}
         refreshKey={refreshKey}
         formRef={form}
         filterSearch={filterSearch}
@@ -442,8 +450,8 @@ export function EmployeeList() {
         filterPosition={filterPosition}
         onFilterPositionChange={setFilterPosition}
         editingKey={editingKey}
-        selectedRowKeys={selectedRowKeys}
-        onSelectionChange={setSelectedRowKeys}
+        selectedRowKeys={canManage ? selectedRowKeys : []}
+        onSelectionChange={canManage ? setSelectedRowKeys : undefined}
         headerActions={
           <PermGate perms={[PERMISSIONS.CAN_MANAGE_EMPLOYEES]}>
             <Space>
@@ -467,7 +475,7 @@ export function EmployeeList() {
         onClose={() => setAccountModal((prev) => ({ ...prev, open: false }))}
       />
 
-      {selectedRowKeys.length > 0 && (
+      {canManage && selectedRowKeys.length > 0 && (
         <div style={{
           position: 'fixed', bottom: 5, left: '50%', transform: 'translateX(-50%)', zIndex: 1000,
           background: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 50%, rgba(240,248,255,0.2) 100%)',

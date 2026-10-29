@@ -22,8 +22,16 @@ async def get_my_calendar_permissions(
 @router.get("/positions")
 async def list_calendar_permissions(
     current_user: dict = Depends(get_current_user),
+    perms: dict = Depends(get_current_permissions),
     db: AsyncSession = Depends(get_db),
 ):
+    is_super_admin = bool(
+        current_user.get("is_super_admin", False)
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+    )
+    if not is_super_admin and not perms.get("can_manage_settings"):
+        raise HTTPException(status_code=403, detail="Không có quyền xem ma trận phân quyền")
+
     token = current_user.get("_token", "")
     positions = await hr_client.list_positions(token=token)
 
@@ -65,9 +73,15 @@ async def update_calendar_permission(
     pos_id: str,
     body: dict,
     current_user: dict = Depends(get_current_user),
-    _: dict = Depends(RequirePermission("can_manage_settings")),
     db: AsyncSession = Depends(get_db),
 ):
+    is_super_admin = bool(
+        current_user.get("is_super_admin", False)
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+    )
+    if not is_super_admin:
+        raise HTTPException(status_code=403, detail="Chỉ Quản trị viên tối cao mới có quyền điều chỉnh phân quyền")
+
     token = current_user.get("_token", "")
     positions = await hr_client.list_positions(token=token)
     pos = next((p for p in positions if p.get("id") == pos_id), None)

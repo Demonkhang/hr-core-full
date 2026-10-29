@@ -47,19 +47,22 @@ function buildMenuItems(perms: any): any[] {
       ],
     });
   }
+  const hrChildren: any[] = [
+    { key: ROUTES.EMPLOYEES, icon: <TeamOutlined />, label: perms?.can_manage_employees ? 'Nhân sự hiện có' : 'Danh bạ nhân sự' },
+  ];
   if (perms?.can_manage_employees) {
-    items.push({
-      key: 'hr',
-      icon: <TeamOutlined />,
-      label: 'Nhân sự',
-      popupClassName: popupClass,
-      children: [
-        { key: ROUTES.EMPLOYEES, icon: <TeamOutlined />, label: 'Nhân sự hiện có' },
-        { key: ROUTES.EMPLOYEES_INACTIVE, icon: <TeamOutlined />, label: 'Nhân sự đã nghỉ' },
-        { key: ROUTES.CONTRACTS, icon: <FileTextOutlined />, label: 'Hợp đồng lao động' },
-      ],
-    });
+    hrChildren.push(
+      { key: ROUTES.EMPLOYEES_INACTIVE, icon: <TeamOutlined />, label: 'Nhân sự đã nghỉ' },
+      { key: ROUTES.CONTRACTS, icon: <FileTextOutlined />, label: 'Hợp đồng lao động' },
+    );
   }
+  items.push({
+    key: 'hr',
+    icon: <TeamOutlined />,
+    label: 'Nhân sự',
+    popupClassName: popupClass,
+    children: hrChildren,
+  });
   if (perms?.can_manage_users) {
     items.push({
       key: 'system',

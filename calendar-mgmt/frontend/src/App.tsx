@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { ProtectedRoute } from '@/components/Common/ProtectedRoute';
+import { PermissionRoute } from '@/components/Common/PermissionRoute';
 import { ErrorBoundary } from '@/components/Common/ErrorBoundary';
 import { LoginPage } from '@/pages/LoginPage';
 import { Dashboard } from '@/pages/Dashboard';
@@ -52,131 +53,131 @@ function App() {
       <Route
         path={ROUTES.SCHEDULES}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_read_schedule']}>
             <AppLayout>
               <SchedulePage />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.SCHEDULES_BY_EMPLOYEE}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_read_schedule']}>
             <AppLayout>
               <EmployeeSchedulePage />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.SCHEDULES_APPROVAL}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_approve_schedule']}>
             <AppLayout>
               <ScheduleApproval />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.SHIFT_TEMPLATES}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_settings']}>
             <AppLayout>
               <ShiftTemplateList />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.OVERTIME_REGISTRATIONS}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_overtime', 'can_approve_overtime']}>
             <AppLayout>
               <OvertimeRegistrationList />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.OVERTIME_REGISTRATIONS_HISTORY}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_overtime', 'can_approve_overtime']}>
             <AppLayout>
               <OvertimeHistory />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.LEAVE_REGISTRATIONS}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_leave', 'can_approve_leave']}>
             <AppLayout>
               <LeaveRegistrationList />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.LEAVE_REGISTRATIONS_HISTORY}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_leave', 'can_approve_leave']}>
             <AppLayout>
               <LeaveHistory />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.MEETING_SCHEDULES}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_meetings', 'can_approve_meetings']}>
             <AppLayout>
               <MeetingList />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.MEETING_SCHEDULES_HISTORY}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_manage_meetings', 'can_approve_meetings']}>
             <AppLayout>
               <MeetingHistory />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.REPORTS}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_view_reports']}>
             <AppLayout>
               <MonthlyReport />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.REPORTS_DEPT_SCHEDULE}
         element={
-          <ProtectedRoute>
+          <PermissionRoute permissions={['can_read_schedule']}>
             <AppLayout>
               <DepartmentScheduleReport />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route
         path={ROUTES.PERMISSIONS}
         element={
-          <ProtectedRoute>
+          <PermissionRoute requireSuperAdmin={true}>
             <AppLayout>
               <PermissionManagement />
             </AppLayout>
-          </ProtectedRoute>
+          </PermissionRoute>
         }
       />
       <Route path="*" element={<Navigate to={ROUTES.HOME} />} />

@@ -13,6 +13,7 @@ import type { Employee } from '@/types/employee';
 import type { JobPosition } from '@/types/jobPosition';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { useSetPageTitle } from '@/components/Layout/AppLayout';
+import { useAuthStore } from '@/store/authStore';
 import { SalaryTab } from './SalaryTab';
 import { QualificationsTab } from './QualificationsTab';
 import { ContractsTab } from './ContractsTab';
@@ -20,6 +21,11 @@ import { ContractsTab } from './ContractsTab';
 export function EmployeeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const canManage = Boolean(user?.is_super_admin || user?.permissions?.can_manage_employees);
+  const isSelf = Boolean(user?.employee_id && String(user.employee_id) === String(id));
+  const canViewSensitive = canManage || isSelf;
+
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [jobPosition, setJobPosition] = useState<JobPosition | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,25 +115,26 @@ export function EmployeeDetail() {
       )}
 
       <Tabs
-        defaultActiveKey="salary"
+        defaultActiveKey={canViewSensitive ? 'salary' : 'qualifications'}
         items={[
-          {
-            key: 'contracts',
-            label: <span><FileTextOutlined /> Hợp đồng lao động</span>,
-            children: <ContractsTab employeeId={id!} />,
-          },
-          {
-            key: 'salary',
-            label: <span><DollarOutlined /> Quá trình lương</span>,
-            children: <SalaryTab employeeId={id!} />,
-          },
+          ...(canViewSensitive ? [
+            {
+              key: 'contracts',
+              label: <span><FileTextOutlined /> Hợp đồng lao động</span>,
+              children: <ContractsTab employeeId={id!} />,
+            },
+            {
+              key: 'salary',
+              label: <span><DollarOutlined /> Quá trình lương</span>,
+              children: <SalaryTab employeeId={id!} />,
+            },
+          ] : []),
           {
             key: 'qualifications',
             label: <span><ReadOutlined /> Trình độ chuyên môn</span>,
             children: <QualificationsTab employeeId={id!} />,
           },
         ]}
-
       />
     </div>
   );
