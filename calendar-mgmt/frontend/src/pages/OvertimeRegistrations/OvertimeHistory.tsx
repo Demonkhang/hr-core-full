@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Tag, message, Typography } from 'antd';
+import { Table, Tag, message, Typography, Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import { overtimeRegistrationService } from '@/services/overtimeRegistrationService';
 import type { OvertimeRegistration } from '@/types/overtimeRegistration';
 import { useAuthStore } from '@/store/authStore';
@@ -154,9 +156,36 @@ export function OvertimeHistory() {
     },
   ], []);
 
+  const handleExportExcel = () => {
+    if (!registrations.length) {
+      message.warning('Không có dữ liệu để xuất');
+      return;
+    }
+    const rows = registrations.map((r, idx) => ({
+      STT: idx + 1,
+      'Ngày': r.date ? dayjs(r.date).format('DD/MM/YYYY') : '-',
+      'Nhân viên': r.employee_name || '-',
+      'Phòng ban': r.department_name || '-',
+      'Giờ bắt đầu': r.start_time ? r.start_time.substring(0, 5) : '-',
+      'Giờ kết thúc': r.end_time ? r.end_time.substring(0, 5) : '-',
+      'Số giờ (h)': r.total_hours ?? 0,
+      'Lý do': r.reason || '',
+      'Trạng thái': STATUS_LABELS[r.status] || r.status,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'LichSuOT');
+    XLSX.writeFile(wb, `Lich_su_them_gio_${dayjs().format('YYYYMMDD')}.xlsx`);
+  };
+
   return (
     <div>
-      <Typography.Title level={4} style={{ marginBottom: 16 }}>Lịch sử thêm giờ</Typography.Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>Lịch sử thêm giờ</Typography.Title>
+        <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>
+          Xuất Excel
+        </Button>
+      </div>
       <Table dataSource={registrations} columns={columns} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
     </div>
   );

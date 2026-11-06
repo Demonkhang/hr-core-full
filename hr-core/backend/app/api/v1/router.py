@@ -11,6 +11,10 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.audit_logs import router as audit_logs_router
 from app.api.v1.payroll import router as payroll_router
 from app.api.v1.contracts import router as contracts_router
+from app.api.v1.personnel_profiles import router as personnel_profiles_router
+from app.api.v1.personnel_alerts import router as personnel_alerts_router
+from app.api.v1.mobile_ess import router as mobile_ess_router
+
 
 
 api_router = APIRouter(prefix="/api/v1")
@@ -27,5 +31,9 @@ api_router.include_router(contracts_router, prefix="/contracts", tags=["Contract
 api_router.include_router(dashboard_router, prefix="/reports", tags=["Dashboard"])
 api_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit Logs"])
 api_router.include_router(payroll_router, prefix="/payroll", tags=["Payroll"])
+api_router.include_router(personnel_profiles_router, prefix="/personnel-profiles", tags=["Personnel Profiles (BNV)"])
+api_router.include_router(personnel_alerts_router, prefix="/personnel-alerts", tags=["Personnel Alerts (BNV)"])
+api_router.include_router(mobile_ess_router, prefix="/mobile-ess", tags=["Mobile ESS (Specialist Portal)"])
+
 
 

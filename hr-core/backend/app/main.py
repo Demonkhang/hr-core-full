@@ -56,8 +56,35 @@ async def lifespan(app: FastAPI):
             await session.commit()
             logger.info("Seeded default public sector shift rate configs.")
 
+    # Background job quét cảnh báo nâng bậc lương & bổ nhiệm lại lúc 00:01 hằng đêm
+    import asyncio
+    from datetime import datetime, timedelta
+    from app.services.personnel_alert_service import scan_and_sync_alerts
+
+    async def _nightly_alert_scanner():
+        while True:
+            try:
+                now = datetime.now()
+                next_run = now.replace(hour=0, minute=1, second=0, microsecond=0)
+                if next_run <= now:
+                    next_run += timedelta(days=1)
+                wait_seconds = (next_run - now).total_seconds()
+                await asyncio.sleep(wait_seconds)
+                async with async_session_factory() as alert_session:
+                    await scan_and_sync_alerts(alert_session)
+                    logger.info("Nightly 00:01 personnel alert scan completed.")
+            except asyncio.CancelledError:
+                break
+            except Exception as scan_err:
+                logger.warning(f"Nightly personnel alert scanner warning: {scan_err}")
+                await asyncio.sleep(3600)
+
+    scanner_task = asyncio.create_task(_nightly_alert_scanner())
+
     yield
+    scanner_task.cancel()
     await engine.dispose()
+
     logger.info("Application shutdown")
 
 

@@ -23,5 +23,10 @@ export const ROUTES = {
   AUDIT_LOGS: '/audit-logs',
   BASE_SALARY_CONFIG: '/base-salary-config',
   CONTRACTS: '/contracts',
+  PERSONNEL_PROFILES: '/personnel-profiles',
+  PERSONNEL_PROFILE_DETAIL: (userId: string) => `/personnel-profiles/${userId}`,
+  PERSONNEL_ALERTS: '/personnel-alerts',
+  MOBILE_ESS: '/mobile-ess',
 };
+
 

@@ -10,7 +10,19 @@ export interface LeaveBalance {
   created_at: string | null;
   updated_at: string | null;
   employee_name?: string;
+  employee_code?: string;
+  department_id?: string;
   department_name?: string;
+  hire_date?: string;
+  pending_days?: number;
+  other_leave_days?: number;
+  other_pending_days?: number;
+  sick_days?: number;
+  max_sick_days?: number;
+  personal_paid_days?: number;
+  personal_unpaid_days?: number;
+  maternity_days?: number;
+  total_taken_days?: number;
 }
 
 export interface LeaveBalanceCreate {

@@ -26,7 +26,19 @@ class LeaveBalanceResponse(BaseModel):
     remaining: float
     is_active: bool
     employee_name: Optional[str] = None
+    employee_code: Optional[str] = None
+    department_id: Optional[str] = None
     department_name: Optional[str] = None
+    hire_date: Optional[str] = None
+    pending_days: float = 0.0
+    other_leave_days: float = 0.0
+    other_pending_days: float = 0.0
+    sick_days: float = 0.0
+    max_sick_days: float = 30.0
+    personal_paid_days: float = 0.0
+    personal_unpaid_days: float = 0.0
+    maternity_days: float = 0.0
+    total_taken_days: float = 0.0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

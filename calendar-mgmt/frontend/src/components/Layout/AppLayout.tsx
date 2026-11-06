@@ -79,6 +79,7 @@ function buildMenuItems(user: any) {
         children: [
           { key: ROUTES.OVERTIME_REGISTRATIONS, icon: <ClockCircleOutlined style={iconStyle('#fb923c')} />, label: 'Đăng ký thêm giờ' },
           { key: ROUTES.OVERTIME_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
+          { key: ROUTES.OVERTIME_STATISTICS, icon: <BarChartOutlined style={iconStyle('#60a5fa')} />, label: 'Thống kê' },
         ],
       }
     : null;
@@ -94,6 +95,7 @@ function buildMenuItems(user: any) {
         children: [
           { key: ROUTES.LEAVE_REGISTRATIONS, icon: <CalendarOutlined style={iconStyle('#34d399')} />, label: 'Đăng ký phép' },
           { key: ROUTES.LEAVE_REGISTRATIONS_HISTORY, icon: <TableOutlined style={iconStyle('#94a3b8')} />, label: 'Lịch sử' },
+          { key: ROUTES.LEAVE_STATISTICS, icon: <BarChartOutlined style={iconStyle('#60a5fa')} />, label: 'Thống kê' },
         ],
       }
     : null;
@@ -158,8 +160,10 @@ const pageTitles: Record<string, string> = {
   [ROUTES.SHIFT_TEMPLATES]: 'Quản lý ca trực mẫu',
   [ROUTES.OVERTIME_REGISTRATIONS]: 'Đăng ký thêm giờ',
   [ROUTES.OVERTIME_REGISTRATIONS_HISTORY]: 'Lịch sử thêm giờ',
+  [ROUTES.OVERTIME_STATISTICS]: 'Thống kê thêm giờ',
   [ROUTES.LEAVE_REGISTRATIONS]: 'Đăng ký nghỉ phép',
   [ROUTES.LEAVE_REGISTRATIONS_HISTORY]: 'Lịch sử nghỉ phép',
+  [ROUTES.LEAVE_STATISTICS]: 'Thống kê nghỉ phép',
   [ROUTES.MEETING_SCHEDULES]: 'Lịch họp / Đột xuất',
   [ROUTES.MEETING_SCHEDULES_HISTORY]: 'Lịch sử lịch họp',
   [ROUTES.REPORTS]: 'Báo cáo tổng hợp giờ',

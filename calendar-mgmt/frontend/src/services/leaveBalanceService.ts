@@ -3,10 +3,25 @@ import { API_ENDPOINTS } from '../utils/apiEndpoints';
 import { LeaveBalance, LeaveBalanceCreate, LeaveBalanceUpdate } from '../types/leave';
 
 export const leaveBalanceService = {
-  getAll: async (skip: number = 0, limit: number = 100, year?: number, employeeId?: string): Promise<LeaveBalance[]> => {
+  getAll: async (
+    skip: number = 0,
+    limit: number = 100,
+    year?: number,
+    employeeId?: string,
+    departmentId?: string | string[]
+  ): Promise<LeaveBalance[]> => {
     let url = `${API_ENDPOINTS.LEAVE_BALANCES}?skip=${skip}&limit=${limit}`;
     if (year) url += `&year=${year}`;
     if (employeeId) url += `&employee_id=${employeeId}`;
+    if (departmentId) {
+      if (Array.isArray(departmentId)) {
+        departmentId.forEach((id) => {
+          if (id) url += `&department_id=${id}`;
+        });
+      } else {
+        url += `&department_id=${departmentId}`;
+      }
+    }
     const response = await apiClient.get<LeaveBalance[]>(url);
     return response.data;
   },
@@ -28,6 +43,13 @@ export const leaveBalanceService = {
 
   initForYear: async (year: number): Promise<{ message: string, count: number }> => {
     const response = await apiClient.post<{ message: string, count: number }>(`${API_ENDPOINTS.LEAVE_BALANCES_INIT}?year=${year}`);
+    return response.data;
+  },
+
+  carryOverForYear: async (year: number, maxDays: number = 5): Promise<{ message: string; updated_count: number }> => {
+    const response = await apiClient.post<{ message: string; updated_count: number }>(
+      `${API_ENDPOINTS.LEAVE_BALANCES}/carry-over?year=${year}&max_days=${maxDays}`
+    );
     return response.data;
   },
 

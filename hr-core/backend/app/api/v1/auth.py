@@ -1,5 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db, async_session_factory
 from app.api.deps import get_current_user, get_current_permissions
@@ -10,6 +11,9 @@ from app.schemas.auth import (
 from app.services.authentication_service import authenticate_user, create_tokens, refresh_tokens, revoke_token
 from app.services import user_service
 from app.models.user import User
+from app.models.employee import Employee
+from app.models.position import Position
+from app.models.personnel_profile import VcProfile
 from app.core.constants import RESPONSE_MESSAGES
 from app.core.exceptions import UnauthorizedError
 from app.core.security import validate_password_strength
@@ -94,7 +98,72 @@ async def logout(
 async def get_me(
     current_user: User = Depends(get_current_user),
     perms: dict = Depends(get_current_permissions),
+    db: AsyncSession = Depends(get_db),
 ):
+    pos_name: str | None = None
+    pos_code: str | None = None
+    emp: Employee | None = None
+    pos: Position | None = None
+
+    emp_id = current_user.employee_id
+    if not emp_id:
+        res_prof = await db.execute(
+            select(VcProfile.employee_id).where(VcProfile.user_id == current_user.id)
+        )
+        emp_id = res_prof.scalar_one_or_none()
+
+    if emp_id:
+        res_emp = await db.execute(select(Employee).where(Employee.id == emp_id))
+        emp = res_emp.scalar_one_or_none()
+        if emp and emp.position_id:
+            res_pos = await db.execute(select(Position).where(Position.id == emp.position_id))
+            pos = res_pos.scalar_one_or_none()
+
+    if pos:
+        pos_name = pos.name
+        pos_code = pos.code
+    elif emp and emp.position:
+        pos_name = emp.position
+
+    pos_name_lower = (pos_name or "").strip().lower()
+    pos_code_upper = (pos_code or "").strip().upper()
+
+    non_manager_keywords = (
+        "nhân viên",
+        "chuyên viên",
+        "người lao động",
+        "cộng tác viên",
+        "thực tập",
+        "tập sự",
+        "văn thư",
+        "thủ quỹ",
+        "kế toán viên",
+        "người đăng ký",
+        "cán bộ",
+        "viên chức",
+    )
+    manager_keywords = (
+        "giám đốc",
+        "trưởng phòng",
+        "phó phòng",
+        "phó trưởng phòng",
+        "chánh văn phòng",
+        "phó chánh",
+        "trưởng ban",
+        "phó ban",
+        "quản lý",
+        "quản trị",
+    )
+
+    if current_user.is_super_admin or current_user.username.lower() in ("admin", "manager"):
+        is_mgmt = True
+    elif any(k in pos_name_lower for k in non_manager_keywords) or pos_code_upper in ("NV", "CV", "CVC", "NLD", "CTV"):
+        is_mgmt = False
+    elif any(k in pos_name_lower for k in manager_keywords) or pos_code_upper in ("GD", "PGD", "TP", "PTP", "CVP", "PCVP"):
+        is_mgmt = True
+    else:
+        is_mgmt = bool(perms.get("can_manage_users") or perms.get("can_manage_settings"))
+
     return UserInfo(
         id=str(current_user.id),
         username=current_user.username,
@@ -102,7 +171,10 @@ async def get_me(
         full_name=current_user.full_name,
         is_super_admin=current_user.is_super_admin,
         department_id=str(current_user.department_id) if current_user.department_id else None,
-        employee_id=str(current_user.employee_id) if current_user.employee_id else None,
+        employee_id=str(emp_id) if emp_id else None,
+        position_name=pos_name,
+        position_code=pos_code,
+        is_management_position=is_mgmt,
         must_change_password=current_user.must_change_password,
         permissions=UserPermissions(**perms),
     )

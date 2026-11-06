@@ -23,5 +23,12 @@ export const reportService = {
     });
     return res.data;
   },
+
+  async unfinalizeMonthlySummary(month: string): Promise<any> {
+    const res = await apiClient.post(`${API_ENDPOINTS.REPORTS_MONTHLY_SUMMARY}/unfinalize`, null, {
+      params: { month },
+    });
+    return res.data;
+  },
 };
 

@@ -65,12 +65,6 @@ async def get_monthly_summary(
         if s.is_overtime:
             emp_sched_map[emp_key]["overtime_hours"] += sh
 
-    all_emp_ids = list(set(list(ms_map.keys()) + list(emp_sched_map.keys())))
-    if not all_emp_ids:
-        return []
-
-    emp_map = await hr_client.get_employees_batch(all_emp_ids) if all_emp_ids else {}
-
     # 3. Query LeaveRegistrations for the month
     leave_query = (
         select(
@@ -79,6 +73,7 @@ async def get_monthly_summary(
             func.sum(LeaveRegistration.total_days).label("leave_days"),
         )
         .where(
+            LeaveRegistration.is_active == True,
             LeaveRegistration.status == LeaveRegistrationStatus.APPROVED,
             LeaveRegistration.start_date < next_month,
             LeaveRegistration.end_date >= month,
@@ -98,11 +93,30 @@ async def get_monthly_summary(
     for emp_id_val, ltype, days in leave_rows:
         emp_key = str(emp_id_val)
         if emp_key not in leave_map:
-            leave_map[emp_key] = {"annual": 0.0, "other": 0.0}
-        if ltype == LeaveType.ANNUAL.value:
-            leave_map[emp_key]["annual"] += float(days or 0)
+            leave_map[emp_key] = {
+                "annual": 0.0,
+                "personal_paid": 0.0,
+                "social_insurance": 0.0,
+                "unpaid": 0.0,
+                "other": 0.0,
+            }
+        d_val = float(days or 0)
+        if ltype == LeaveType.ANNUAL.value or ltype == LeaveType.ANNUAL:
+            leave_map[emp_key]["annual"] += d_val
         else:
-            leave_map[emp_key]["other"] += float(days or 0)
+            leave_map[emp_key]["other"] += d_val
+            if ltype in (LeaveType.PERSONAL_PAID.value, LeaveType.PERSONAL_PAID):
+                leave_map[emp_key]["personal_paid"] += d_val
+            elif ltype in (LeaveType.SICK.value, LeaveType.SICK, LeaveType.MATERNITY.value, LeaveType.MATERNITY):
+                leave_map[emp_key]["social_insurance"] += d_val
+            elif ltype in (LeaveType.PERSONAL_UNPAID.value, LeaveType.PERSONAL_UNPAID):
+                leave_map[emp_key]["unpaid"] += d_val
+
+    all_emp_ids = list(set(list(ms_map.keys()) + list(emp_sched_map.keys()) + list(leave_map.keys())))
+    if not all_emp_ids:
+        return []
+
+    emp_map = await hr_client.get_employees_batch(all_emp_ids) if all_emp_ids else {}
 
     data = []
     for emp_key in all_emp_ids:
@@ -114,7 +128,13 @@ async def get_monthly_summary(
 
         ms_rec = ms_map.get(emp_key)
         sched_stats = emp_sched_map.get(emp_key, {"total_shifts": 0, "total_hours": 0.0, "overtime_hours": 0.0})
-        lv = leave_map.get(emp_key, {"annual": 0.0, "other": 0.0})
+        lv = leave_map.get(emp_key, {
+            "annual": 0.0,
+            "personal_paid": 0.0,
+            "social_insurance": 0.0,
+            "unpaid": 0.0,
+            "other": 0.0,
+        })
 
         if ms_rec:
             tot_h = ms_rec.total_hours
@@ -142,8 +162,11 @@ async def get_monthly_summary(
             "normal_hours": round(norm_h, 1),
             "overtime_hours": round(ot_h, 1),
             "total_shifts": tot_shifts,
-            "annual_leave_days": lv["annual"],
-            "other_leave_days": lv["other"],
+            "annual_leave_days": round(lv["annual"], 1),
+            "personal_paid_days": round(lv["personal_paid"], 1),
+            "social_insurance_days": round(lv["social_insurance"], 1),
+            "unpaid_leave_days": round(lv["unpaid"], 1),
+            "other_leave_days": round(lv["other"], 1),
             "is_finalized": is_fin,
         })
 
@@ -294,18 +317,39 @@ async def finalize_monthly_summary(
     if ot_res.scalars().first():
         raise BadRequestError("Vẫn còn đơn đăng ký OT CHỜ DUYỆT trong tháng này. Vui lòng xử lý trước khi chốt công.")
 
-    # Get summaries for month
+    # Get enriched report data first so we can persist MonthlySummary rows
+    report_data = await get_monthly_summary(db, month=month)
+
     summary_stmt = select(MonthlySummary).where(MonthlySummary.month == month)
     summary_res = await db.execute(summary_stmt)
-    summaries = summary_res.scalars().all()
+    existing_map = {str(s.employee_id): s for s in summary_res.scalars().all()}
 
-    for s in summaries:
-        s.is_finalized = True
+    finalized_count = 0
+    for item in report_data:
+        emp_id_str = item["employee_id"]
+        if emp_id_str in existing_map:
+            ms = existing_map[emp_id_str]
+            ms.total_hours = item["total_hours"]
+            ms.normal_hours = item["normal_hours"]
+            ms.overtime_hours = item["overtime_hours"]
+            ms.total_shifts = item["total_shifts"]
+            ms.is_finalized = True
+        else:
+            ms = MonthlySummary(
+                employee_id=UUID(emp_id_str),
+                department_id=UUID(item["department_id"]) if item.get("department_id") else None,
+                month=month,
+                total_hours=item["total_hours"],
+                normal_hours=item["normal_hours"],
+                overtime_hours=item["overtime_hours"],
+                total_shifts=item["total_shifts"],
+                is_finalized=True,
+            )
+            db.add(ms)
+        item["is_finalized"] = True
+        finalized_count += 1
 
     await db.commit()
-
-    # Get enriched report data to send to HR Core
-    report_data = await get_monthly_summary(db, month=month)
 
     # Post to HR Core payroll endpoint
     try:
@@ -323,7 +367,24 @@ async def finalize_monthly_summary(
 
     return {
         "status": "ok",
-        "message": f"Đã chốt công tháng {month.strftime('%m/%Y')} thành công",
-        "finalized_count": len(summaries),
+        "message": f"Đã chốt công tháng {month.strftime('%m/%Y')} thành công ({finalized_count} nhân sự)",
+        "finalized_count": finalized_count,
+    }
+
+
+async def unfinalize_monthly_summary(
+    db: AsyncSession,
+    month: date,
+) -> dict:
+    summary_stmt = select(MonthlySummary).where(MonthlySummary.month == month)
+    summary_res = await db.execute(summary_stmt)
+    summaries = summary_res.scalars().all()
+    for s in summaries:
+        s.is_finalized = False
+    await db.commit()
+    return {
+        "status": "ok",
+        "message": f"Đã mở khoá bảng công tháng {month.strftime('%m/%Y')}",
+        "unfinalized_count": len(summaries),
     }
 

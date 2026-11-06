@@ -13,10 +13,96 @@ from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 from app.models.overtime_registration import OvertimeRegistration, OvertimeRegistrationStatus
 from app.clients.hr_client import hr_client
 from app.services.overtime_service import sync_overtime_to_schedule, revert_overtime_schedule
+from app.services.leave_service import LeaveService
+from app.services.notification_service import create_notification
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+OT_DAILY_LIMIT = 12.0
+OT_MONTHLY_LIMIT = 40.0
+OT_YEARLY_LIMIT = 200.0
+
+
+async def _get_employee_ot_hours(
+    db: AsyncSession,
+    employee_id: str,
+    target_date: date,
+    exclude_reg_id: str | None = None,
+) -> dict[str, float]:
+    year_start = date(target_date.year, 1, 1)
+    year_end = date(target_date.year, 12, 31)
+    month_start = date(target_date.year, target_date.month, 1)
+    next_month = date(
+        target_date.year + (target_date.month // 12),
+        (target_date.month % 12) + 1,
+        1,
+    )
+
+    query = select(OvertimeRegistration).where(
+        OvertimeRegistration.employee_id == employee_id,
+        OvertimeRegistration.is_active == True,
+        OvertimeRegistration.date >= year_start,
+        OvertimeRegistration.date <= year_end,
+        OvertimeRegistration.status.in_([
+            OvertimeRegistrationStatus.APPROVED,
+            OvertimeRegistrationStatus.PENDING,
+        ]),
+    )
+    if exclude_reg_id:
+        query = query.where(OvertimeRegistration.id != exclude_reg_id)
+
+    res = await db.execute(query)
+    regs = res.scalars().all()
+
+    month_approved = 0.0
+    month_pending = 0.0
+    year_approved = 0.0
+    year_pending = 0.0
+
+    for r in regs:
+        hrs = float(r.total_hours or 0.0)
+        is_in_month = month_start <= r.date < next_month
+        if r.status == OvertimeRegistrationStatus.APPROVED:
+            year_approved += hrs
+            if is_in_month:
+                month_approved += hrs
+        elif r.status == OvertimeRegistrationStatus.PENDING:
+            year_pending += hrs
+            if is_in_month:
+                month_pending += hrs
+
+    return {
+        "month_approved": round(month_approved, 1),
+        "month_pending": round(month_pending, 1),
+        "year_approved": round(year_approved, 1),
+        "year_pending": round(year_pending, 1),
+    }
+
+
+async def _validate_ot_limits(
+    db: AsyncSession,
+    employee_id: str,
+    reg_date: date,
+    total_hours: float,
+    exclude_reg_id: str | None = None,
+) -> None:
+    if total_hours <= 0:
+        raise BadRequestError(detail="Số giờ làm thêm phải lớn hơn 0")
+    if total_hours > OT_DAILY_LIMIT:
+        raise BadRequestError(
+            detail=f"Theo Điều 107 Bộ luật Lao động 2019, tổng thời gian làm việc không vượt quá {OT_DAILY_LIMIT:.0f} giờ/ngày (Yêu cầu: {total_hours:.1f}h)"
+        )
+    ot_stats = await _get_employee_ot_hours(db, str(employee_id), reg_date, exclude_reg_id=exclude_reg_id)
+    if ot_stats["month_approved"] + total_hours > OT_MONTHLY_LIMIT:
+        raise BadRequestError(
+            detail=f"Vượt trần làm thêm giờ trong tháng theo Điều 107 BLLĐ (Tối đa {OT_MONTHLY_LIMIT:.0f}h/tháng, Đã duyệt tháng {reg_date.strftime('%m/%Y')}: {ot_stats['month_approved']:.1f}h, Yêu cầu thêm: {total_hours:.1f}h)"
+        )
+    if ot_stats["year_approved"] + total_hours > OT_YEARLY_LIMIT:
+        raise BadRequestError(
+            detail=f"Vượt trần làm thêm giờ trong năm theo Điều 107 BLLĐ (Tối đa {OT_YEARLY_LIMIT:.0f}h/năm, Đã duyệt năm {reg_date.year}: {ot_stats['year_approved']:.1f}h, Yêu cầu thêm: {total_hours:.1f}h)"
+        )
 
 
 class BulkApproveRequest(BaseModel):
@@ -133,6 +219,124 @@ async def list_overtime_registrations(
     return [build_overtime_registration_response(r, emp=emp_map.get(str(r.employee_id))) for r in registrations]
 
 
+@router.get("/statistics")
+async def get_overtime_statistics(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    employee_id: Optional[str] = Query(None),
+    department_id: Optional[List[str]] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    today = date.today()
+    target_year = year or today.year
+    target_month = month or today.month
+    token = current_user.get("_token", "")
+
+    year_start = date(target_year, 1, 1)
+    year_end = date(target_year, 12, 31)
+    month_start = date(target_year, target_month, 1)
+    next_month = date(
+        target_year + (target_month // 12),
+        (target_month % 12) + 1,
+        1,
+    )
+
+    employees = await hr_client.get_employees(active_only=True, token=token)
+    emp_map = {str(e["id"]): e for e in employees}
+
+    query = select(OvertimeRegistration).where(
+        OvertimeRegistration.is_active == True,
+        OvertimeRegistration.date >= year_start,
+        OvertimeRegistration.date <= year_end,
+        OvertimeRegistration.status.in_([
+            OvertimeRegistrationStatus.APPROVED,
+            OvertimeRegistrationStatus.PENDING,
+        ]),
+    )
+    if employee_id:
+        query = query.where(OvertimeRegistration.employee_id == employee_id)
+
+    res = await db.execute(query)
+    regs = res.scalars().all()
+
+    missing_emp_ids = list({str(r.employee_id) for r in regs if str(r.employee_id) not in emp_map})
+    if missing_emp_ids:
+        extra = await hr_client.get_employees_batch(missing_emp_ids, token=token)
+        for k, v in extra.items():
+            if v:
+                emp_map[k] = v
+
+    stats_by_emp: dict[str, dict] = {}
+    target_emp_ids = [employee_id] if employee_id else list(emp_map.keys())
+    for eid in target_emp_ids:
+        stats_by_emp[str(eid)] = {
+            "month_approved_hours": 0.0,
+            "month_pending_hours": 0.0,
+            "month_count": 0,
+            "year_approved_hours": 0.0,
+            "year_pending_hours": 0.0,
+            "year_count": 0,
+        }
+
+    for r in regs:
+        eid = str(r.employee_id)
+        if eid not in stats_by_emp:
+            stats_by_emp[eid] = {
+                "month_approved_hours": 0.0,
+                "month_pending_hours": 0.0,
+                "month_count": 0,
+                "year_approved_hours": 0.0,
+                "year_pending_hours": 0.0,
+                "year_count": 0,
+            }
+        hrs = float(r.total_hours or 0.0)
+        in_month = month_start <= r.date < next_month
+        if r.status == OvertimeRegistrationStatus.APPROVED:
+            stats_by_emp[eid]["year_approved_hours"] += hrs
+            stats_by_emp[eid]["year_count"] += 1
+            if in_month:
+                stats_by_emp[eid]["month_approved_hours"] += hrs
+                stats_by_emp[eid]["month_count"] += 1
+        elif r.status == OvertimeRegistrationStatus.PENDING:
+            stats_by_emp[eid]["year_pending_hours"] += hrs
+            if in_month:
+                stats_by_emp[eid]["month_pending_hours"] += hrs
+
+    items = []
+    for eid, st in stats_by_emp.items():
+        emp = emp_map.get(eid, {}) or {}
+        emp_dept_id = str(emp.get("department_id")) if emp.get("department_id") else None
+        if department_id and emp_dept_id not in department_id:
+            continue
+        m_app = round(st["month_approved_hours"], 1)
+        m_pend = round(st["month_pending_hours"], 1)
+        y_app = round(st["year_approved_hours"], 1)
+        y_pend = round(st["year_pending_hours"], 1)
+        items.append({
+            "employee_id": eid,
+            "employee_name": emp.get("full_name") or f"Nhân viên ({eid[:8]})",
+            "employee_code": emp.get("employee_code"),
+            "department_id": emp_dept_id,
+            "department_name": emp.get("department_name") or "-",
+            "year": target_year,
+            "month": target_month,
+            "month_approved_hours": m_app,
+            "month_pending_hours": m_pend,
+            "month_count": st["month_count"],
+            "month_limit": OT_MONTHLY_LIMIT,
+            "month_remaining_hours": round(max(0.0, OT_MONTHLY_LIMIT - m_app), 1),
+            "year_approved_hours": y_app,
+            "year_pending_hours": y_pend,
+            "year_count": st["year_count"],
+            "year_limit": OT_YEARLY_LIMIT,
+            "year_remaining_hours": round(max(0.0, OT_YEARLY_LIMIT - y_app), 1),
+        })
+
+    items.sort(key=lambda x: (x["employee_name"] or "").lower())
+    return items
+
+
 @router.get("/{reg_id}", response_model=OvertimeRegistrationResponse)
 async def get_overtime_registration(
     reg_id: str,
@@ -161,13 +365,28 @@ async def create_overtime_registration(
     if scope == "self" and str(employee_id) != str(current_user.get("employee_id")):
         raise ForbiddenError(detail="Bạn chỉ có thể tạo đăng ký thêm giờ cho chính mình")
 
+    await LeaveService.check_month_finalized(db, body.date)
+    await _validate_ot_limits(db, str(employee_id), body.date, float(body.total_hours or 0.0))
+
     reg_data = body.model_dump()
     reg_data["employee_id"] = employee_id
-    # Luôn luôn khởi tạo ở trạng thái PENDING (chờ duyệt)
     reg_data["status"] = OvertimeRegistrationStatus.PENDING
 
     reg = OvertimeRegistration(**reg_data)
     db.add(reg)
+    await db.flush()
+
+    try:
+        await create_notification(
+            db,
+            employee_id=str(employee_id),
+            title="Đã gửi đăng ký làm thêm giờ",
+            message=f"Đơn đăng ký làm thêm ngày {body.date.strftime('%d/%m/%Y')} ({body.total_hours}h) đang chờ phê duyệt.",
+            type="overtime_created",
+        )
+    except Exception as e:
+        logger.warning(f"Overtime create notification warning: {e}")
+
     await db.commit()
 
     result = await db.execute(select(OvertimeRegistration).where(OvertimeRegistration.id == reg.id))
@@ -204,6 +423,10 @@ async def update_overtime_registration(
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(reg, key, value)
+
+    await LeaveService.check_month_finalized(db, reg.date)
+    await _validate_ot_limits(db, str(reg.employee_id), reg.date, float(reg.total_hours or 0.0), exclude_reg_id=str(reg.id))
+
     await db.commit()
 
     emp = await hr_client.get_employee(str(reg.employee_id))
@@ -224,6 +447,8 @@ async def approve_overtime_registration(
     if reg.status != OvertimeRegistrationStatus.PENDING:
         raise BadRequestError(detail="Chỉ có thể duyệt đơn đang chờ")
 
+    await LeaveService.check_month_finalized(db, reg.date)
+
     reg.status = OvertimeRegistrationStatus.APPROVED
     reg.approved_by_id = current_user.get("id")
     reg.approved_at = datetime.now(timezone.utc)
@@ -235,6 +460,17 @@ async def approve_overtime_registration(
         approver_id=current_user.get("id"),
         auth_token=current_user.get("_token", ""),
     )
+
+    try:
+        await create_notification(
+            db,
+            employee_id=str(reg.employee_id),
+            title="Đăng ký làm thêm giờ đã được duyệt",
+            message=f"Đơn làm thêm giờ ngày {reg.date.strftime('%d/%m/%Y')} ({reg.total_hours}h) đã được phê duyệt.",
+            type="overtime_approved",
+        )
+    except Exception:
+        pass
 
     await db.commit()
     await db.refresh(reg)
@@ -260,6 +496,18 @@ async def reject_overtime_registration(
 
     reg.status = OvertimeRegistrationStatus.REJECTED
     reg.rejection_reason = body.rejection_reason
+
+    try:
+        await create_notification(
+            db,
+            employee_id=str(reg.employee_id),
+            title="Đăng ký làm thêm giờ bị từ chối",
+            message=f"Đơn làm thêm giờ ngày {reg.date.strftime('%d/%m/%Y')} ({reg.total_hours}h) đã bị từ chối. Lý do: {body.rejection_reason or 'Không có'}",
+            type="overtime_rejected",
+        )
+    except Exception:
+        pass
+
     await db.commit()
     await db.refresh(reg)
 
@@ -294,6 +542,16 @@ async def bulk_approve_overtime(
         # Tự động cập nhật lịch trực
         await sync_overtime_to_schedule(db, reg, approver_id=approver_id, auth_token=auth_token)
         approved.append(rid)
+        try:
+            await create_notification(
+                db,
+                employee_id=str(reg.employee_id),
+                title="Đăng ký làm thêm giờ đã được duyệt",
+                message=f"Đơn làm thêm giờ ngày {reg.date.strftime('%d/%m/%Y')} ({reg.total_hours}h) đã được phê duyệt.",
+                type="overtime_approved",
+            )
+        except Exception:
+            pass
 
     await db.commit()
     return {
@@ -325,6 +583,16 @@ async def bulk_reject_overtime(
         reg.approved_by_id = current_user.get("id")
         reg.approved_at = datetime.now(timezone.utc)
         rejected.append(rid)
+        try:
+            await create_notification(
+                db,
+                employee_id=str(reg.employee_id),
+                title="Đăng ký làm thêm giờ bị từ chối",
+                message=f"Đơn làm thêm giờ ngày {reg.date.strftime('%d/%m/%Y')} ({reg.total_hours}h) đã bị từ chối. Lý do: {body.reason}",
+                type="overtime_rejected",
+            )
+        except Exception:
+            pass
     await db.commit()
     return {
         "success_count": len(rejected),
@@ -344,6 +612,8 @@ async def delete_overtime_registration(
     reg = result.scalar_one_or_none()
     if not reg:
         raise NotFoundError(detail="Không tìm thấy đăng ký thêm giờ")
+
+    await LeaveService.check_month_finalized(db, reg.date)
 
     is_admin = bool(
         current_user.get("is_super_admin")

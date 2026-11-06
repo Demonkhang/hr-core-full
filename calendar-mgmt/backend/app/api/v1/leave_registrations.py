@@ -13,7 +13,16 @@ from app.models.leave_registration import LeaveRegistration, LeaveRegistrationSt
 from app.models.schedule import Schedule, ScheduleStatus
 from app.core.exceptions import NotFoundError, ForbiddenError, BadRequestError
 from app.services.leave_service import LeaveService
+from app.services.notification_service import create_notification
 from app.clients.hr_client import hr_client
+
+LEAVE_TYPE_VI_LABELS = {
+    "annual": "Nghỉ phép năm",
+    "personal_paid": "Việc riêng có lương",
+    "personal_unpaid": "Nghỉ không lương",
+    "sick": "Nghỉ ốm",
+    "maternity": "Nghỉ thai sản",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +116,17 @@ async def create_leave_registration(
     if not emp:
         raise NotFoundError(detail="Không tìm thấy nhân viên")
 
+    await LeaveService.check_month_finalized(db, body.start_date)
+    await LeaveService.check_month_finalized(db, body.end_date)
+    await LeaveService.check_leave_overlap(
+        db,
+        employee_id=str(employee_id),
+        start_date=body.start_date,
+        end_date=body.end_date,
+        start_session=body.start_session,
+        end_session=body.end_session,
+    )
+
     total_days = LeaveService.calculate_total_days(
         body.start_date, body.end_date, body.start_session, body.end_session
     )
@@ -119,6 +139,25 @@ async def create_leave_registration(
             raise BadRequestError(
                 detail=f"Không đủ ngày phép năm (Yêu cầu: {total_days} ngày, Quỹ phép còn lại: {balance.remaining} ngày)"
             )
+    elif body.leave_type == LeaveType.PERSONAL_PAID:
+        if total_days > 3.0:
+            raise BadRequestError(
+                detail="Theo Khoản 1 Điều 115 Bộ luật Lao động, nghỉ việc riêng hưởng nguyên lương tối đa 03 ngày/lần (Kết hôn: 3 ngày; Con kết hôn: 1 ngày; Tang chế: 3 ngày). Nếu nghỉ thêm vui lòng tách đơn Nghỉ phép năm hoặc Nghỉ không lương."
+            )
+    elif body.leave_type == LeaveType.SICK:
+        target_year = body.start_date.year
+        max_sick = LeaveService.get_max_sick_days_for_year(emp.get("hire_date"), target_year)
+        stats_map = await LeaveService.get_year_leave_stats_map(db, target_year, [str(employee_id)])
+        sick_used = stats_map.get(str(employee_id), {}).get("sick_days", 0.0)
+        if sick_used + total_days > max_sick:
+            raise BadRequestError(
+                detail=f"Vượt quá định mức nghỉ ốm hưởng BHXH trong năm theo Điều 26 Luật BHXH (Tối đa: {max_sick:.0f} ngày/năm, Đã nghỉ: {sick_used:.1f} ngày, Yêu cầu: {total_days:.1f} ngày)"
+            )
+    elif body.leave_type == LeaveType.MATERNITY:
+        if total_days > 240.0:
+            raise BadRequestError(
+                detail="Số ngày nghỉ thai sản vượt quá định mức tối đa theo Điều 139 Bộ luật Lao động (Tối đa 180 ngày sinh một con, hoặc tối đa 240 ngày sinh đôi trở lên)"
+            )
 
     reg_data = body.model_dump()
     reg_data["employee_id"] = employee_id
@@ -127,6 +166,20 @@ async def create_leave_registration(
 
     reg = LeaveRegistration(**reg_data)
     db.add(reg)
+    await db.flush()
+
+    leave_label = LEAVE_TYPE_VI_LABELS.get(str(body.leave_type.value if hasattr(body.leave_type, "value") else body.leave_type), "Nghỉ phép")
+    try:
+        await create_notification(
+            db,
+            employee_id=str(employee_id),
+            title="Đã gửi đơn xin nghỉ phép",
+            message=f"Đơn {leave_label} từ {body.start_date.strftime('%d/%m/%Y')} đến {body.end_date.strftime('%d/%m/%Y')} ({total_days} ngày) đang chờ phê duyệt.",
+            type="leave_created",
+        )
+    except Exception as e:
+        logger.warning(f"Leave create notification warning: {e}")
+
     await db.commit()
 
     result = await db.execute(select(LeaveRegistration).where(LeaveRegistration.id == reg.id))
@@ -151,10 +204,24 @@ async def update_leave_registration(
     for key, value in update_data.items():
         setattr(reg, key, value)
 
+    await LeaveService.check_month_finalized(db, reg.start_date)
+    await LeaveService.check_month_finalized(db, reg.end_date)
+    await LeaveService.check_leave_overlap(
+        db,
+        employee_id=str(reg.employee_id),
+        start_date=reg.start_date,
+        end_date=reg.end_date,
+        start_session=reg.start_session,
+        end_session=reg.end_session,
+        exclude_reg_id=str(reg.id),
+    )
+
     total_days = LeaveService.calculate_total_days(
         reg.start_date, reg.end_date, reg.start_session, reg.end_session
     )
     reg.total_days = total_days
+
+    emp = await _fetch_employee(str(reg.employee_id))
 
     if reg.leave_type == LeaveType.ANNUAL:
         balance = await LeaveService.get_or_create_balance(db, reg.employee_id, reg.start_date.year)
@@ -162,10 +229,28 @@ async def update_leave_registration(
             raise BadRequestError(
                 detail=f"Không đủ ngày phép năm (Yêu cầu: {total_days} ngày, Quỹ phép còn lại: {balance.remaining} ngày)"
             )
+    elif reg.leave_type == LeaveType.PERSONAL_PAID:
+        if total_days > 3.0:
+            raise BadRequestError(
+                detail="Theo Khoản 1 Điều 115 Bộ luật Lao động, nghỉ việc riêng hưởng nguyên lương tối đa 03 ngày/lần (Kết hôn: 3 ngày; Con kết hôn: 1 ngày; Tang chế: 3 ngày). Nếu nghỉ thêm vui lòng tách đơn Nghỉ phép năm hoặc Nghỉ không lương."
+            )
+    elif reg.leave_type == LeaveType.SICK:
+        target_year = reg.start_date.year
+        max_sick = LeaveService.get_max_sick_days_for_year(emp.get("hire_date") if emp else None, target_year)
+        stats_map = await LeaveService.get_year_leave_stats_map(db, target_year, [str(reg.employee_id)])
+        sick_used = stats_map.get(str(reg.employee_id), {}).get("sick_days", 0.0)
+        if sick_used + total_days > max_sick:
+            raise BadRequestError(
+                detail=f"Vượt quá định mức nghỉ ốm hưởng BHXH trong năm theo Điều 26 Luật BHXH (Tối đa: {max_sick:.0f} ngày/năm, Đã nghỉ: {sick_used:.1f} ngày, Yêu cầu: {total_days:.1f} ngày)"
+            )
+    elif reg.leave_type == LeaveType.MATERNITY:
+        if total_days > 240.0:
+            raise BadRequestError(
+                detail="Số ngày nghỉ thai sản vượt quá định mức tối đa theo Điều 139 Bộ luật Lao động (Tối đa 180 ngày sinh một con, hoặc tối đa 240 ngày sinh đôi trở lên)"
+            )
 
     await db.commit()
     await db.refresh(reg)
-    emp = await _fetch_employee(str(reg.employee_id))
     return build_leave_registration_response(reg, emp=emp)
 
 
@@ -179,6 +264,8 @@ async def approve_leave_registration(
     reg = await _get_registration(reg_id, db)
     if reg.status != LeaveRegistrationStatus.PENDING:
         raise BadRequestError(detail="Chỉ có thể duyệt đơn đang ở trạng thái chờ duyệt")
+
+    await LeaveService.check_month_finalized(db, reg.start_date)
 
     reg.status = LeaveRegistrationStatus.APPROVED
     reg.approved_by_id = current_user.get("id")
@@ -196,6 +283,18 @@ async def approve_leave_registration(
     )
     for sched in overlap_schedules.scalars().all():
         sched.status = ScheduleStatus.CANCELLED
+
+    leave_label = LEAVE_TYPE_VI_LABELS.get(str(reg.leave_type), "Nghỉ phép")
+    try:
+        await create_notification(
+            db,
+            employee_id=str(reg.employee_id),
+            title="Đơn nghỉ phép đã được duyệt",
+            message=f"Đơn {leave_label} từ {reg.start_date.strftime('%d/%m/%Y')} đến {reg.end_date.strftime('%d/%m/%Y')} ({reg.total_days} ngày) đã được phê duyệt.",
+            type="leave_approved",
+        )
+    except Exception as e:
+        logger.warning(f"Leave approve notification warning: {e}")
 
     await db.commit()
     await db.refresh(reg)
@@ -217,6 +316,19 @@ async def reject_leave_registration(
 
     reg.status = LeaveRegistrationStatus.REJECTED
     reg.rejection_reason = body.rejection_reason
+
+    leave_label = LEAVE_TYPE_VI_LABELS.get(str(reg.leave_type), "Nghỉ phép")
+    try:
+        await create_notification(
+            db,
+            employee_id=str(reg.employee_id),
+            title="Đơn nghỉ phép bị từ chối",
+            message=f"Đơn {leave_label} từ {reg.start_date.strftime('%d/%m/%Y')} đến {reg.end_date.strftime('%d/%m/%Y')} đã bị từ chối. Lý do: {body.rejection_reason or 'Không có'}",
+            type="leave_rejected",
+        )
+    except Exception as e:
+        logger.warning(f"Leave reject notification warning: {e}")
+
     await db.commit()
 
     reg = await _get_registration(reg_id, db)
@@ -245,11 +357,23 @@ async def bulk_approve_leave(
         reg.approved_by_id = current_user.get("id")
         reg.approved_at = datetime.now(timezone.utc)
         approved.append(rid)
+        leave_label = LEAVE_TYPE_VI_LABELS.get(str(reg.leave_type), "Nghỉ phép")
+        try:
+            await create_notification(
+                db,
+                employee_id=str(reg.employee_id),
+                title="Đơn nghỉ phép đã được duyệt",
+                message=f"Đơn {leave_label} từ {reg.start_date.strftime('%d/%m/%Y')} đến {reg.end_date.strftime('%d/%m/%Y')} ({reg.total_days} ngày) đã được phê duyệt.",
+                type="leave_approved",
+            )
+        except Exception:
+            pass
     await db.commit()
     for rid in approved:
         reg = await db.get(LeaveRegistration, rid)
         if reg and reg.leave_type == LeaveType.ANNUAL:
             await LeaveService.recalculate_leave_balance(db, str(reg.employee_id), reg.start_date.year)
+    await db.commit()
     return {
         "success_count": len(approved),
         "errors": errors,
@@ -279,6 +403,17 @@ async def bulk_reject_leave(
         reg.approved_by_id = current_user.get("id")
         reg.approved_at = datetime.now(timezone.utc)
         rejected.append(rid)
+        leave_label = LEAVE_TYPE_VI_LABELS.get(str(reg.leave_type), "Nghỉ phép")
+        try:
+            await create_notification(
+                db,
+                employee_id=str(reg.employee_id),
+                title="Đơn nghỉ phép bị từ chối",
+                message=f"Đơn {leave_label} từ {reg.start_date.strftime('%d/%m/%Y')} đến {reg.end_date.strftime('%d/%m/%Y')} đã bị từ chối. Lý do: {body.reason}",
+                type="leave_rejected",
+            )
+        except Exception:
+            pass
     await db.commit()
     return {
         "success_count": len(rejected),
@@ -298,6 +433,8 @@ async def delete_leave_registration(
     reg = result.scalar_one_or_none()
     if not reg:
         raise NotFoundError(detail="Không tìm thấy đơn nghỉ phép")
+
+    await LeaveService.check_month_finalized(db, reg.start_date)
 
     old_status = reg.status
     reg.status = LeaveRegistrationStatus.CANCELLED

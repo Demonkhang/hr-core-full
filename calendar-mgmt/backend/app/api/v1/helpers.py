@@ -51,18 +51,42 @@ def build_overtime_registration_response(reg: OvertimeRegistration, emp: dict = 
     )
 
 
-def build_leave_balance_response(b: LeaveBalance, emp: dict = None, dept_name: str = None) -> LeaveBalanceResponse:
+def build_leave_balance_response(
+    b: LeaveBalance,
+    emp: dict = None,
+    dept_name: str = None,
+    stats: dict = None,
+) -> LeaveBalanceResponse:
+    from app.services.leave_service import LeaveService
+
+    stats = stats or {}
+    other_leave_days = round(float(stats.get("other_leave_days", 0.0)), 1)
+    used_days = round(float(b.used or 0.0), 1)
+    hire_date_str = str(emp.get("hire_date")) if emp and emp.get("hire_date") else None
+    max_sick = LeaveService.get_max_sick_days_for_year(hire_date_str, b.year)
     return LeaveBalanceResponse(
         id=str(b.id),
         employee_id=str(b.employee_id),
         year=b.year,
-        total_allocated=b.total_allocated,
-        carried_over=b.carried_over,
-        used=b.used,
-        remaining=b.remaining,
+        total_allocated=round(float(b.total_allocated or 0.0), 1),
+        carried_over=round(float(b.carried_over or 0.0), 1),
+        used=used_days,
+        remaining=round(float(b.remaining or 0.0), 1),
         is_active=b.is_active,
         employee_name=emp.get("full_name") if emp else None,
-        department_name=dept_name,
+        employee_code=emp.get("employee_code") if emp else None,
+        department_id=str(emp.get("department_id")) if emp and emp.get("department_id") else None,
+        department_name=dept_name or (emp.get("department_name") if emp else None),
+        hire_date=hire_date_str,
+        pending_days=round(float(stats.get("pending_days", 0.0)), 1),
+        other_leave_days=other_leave_days,
+        other_pending_days=round(float(stats.get("other_pending_days", 0.0)), 1),
+        sick_days=round(float(stats.get("sick_days", 0.0)), 1),
+        max_sick_days=max_sick,
+        personal_paid_days=round(float(stats.get("personal_paid_days", 0.0)), 1),
+        personal_unpaid_days=round(float(stats.get("personal_unpaid_days", 0.0)), 1),
+        maternity_days=round(float(stats.get("maternity_days", 0.0)), 1),
+        total_taken_days=round(used_days + other_leave_days, 1),
         created_at=b.created_at,
         updated_at=b.updated_at,
     )

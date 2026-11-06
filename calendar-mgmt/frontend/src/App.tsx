@@ -13,9 +13,11 @@ import { ShiftTemplateList } from '@/pages/ShiftTemplates/ShiftTemplateList';
 import { LeaveRegistrationList } from '@/pages/LeaveRegistrations/LeaveRegistrationList';
 import { OvertimeRegistrationList } from '@/pages/OvertimeRegistrations/OvertimeRegistrationList';
 import { OvertimeHistory } from '@/pages/OvertimeRegistrations/OvertimeHistory';
+import { OvertimeStatistics } from '@/pages/OvertimeRegistrations/OvertimeStatistics';
 import { MeetingList } from '@/pages/Meetings/MeetingList';
 import { MeetingHistory } from '@/pages/Meetings/MeetingHistory';
 import { LeaveHistory } from '@/pages/LeaveRegistrations/LeaveHistory';
+import { LeaveStatistics } from '@/pages/LeaveRegistrations/LeaveStatistics';
 import { MonthlyReport } from '@/pages/Reports/MonthlyReport';
 import { DepartmentScheduleReport } from '@/pages/Reports/DepartmentScheduleReport';
 import { PermissionManagement } from '@/pages/Permissions/PermissionManagement';
@@ -111,6 +113,16 @@ function App() {
         }
       />
       <Route
+        path={ROUTES.OVERTIME_STATISTICS}
+        element={
+          <PermissionRoute permissions={['can_manage_overtime', 'can_approve_overtime']}>
+            <AppLayout>
+              <OvertimeStatistics />
+            </AppLayout>
+          </PermissionRoute>
+        }
+      />
+      <Route
         path={ROUTES.LEAVE_REGISTRATIONS}
         element={
           <PermissionRoute permissions={['can_manage_leave', 'can_approve_leave']}>
@@ -126,6 +138,16 @@ function App() {
           <PermissionRoute permissions={['can_manage_leave', 'can_approve_leave']}>
             <AppLayout>
               <LeaveHistory />
+            </AppLayout>
+          </PermissionRoute>
+        }
+      />
+      <Route
+        path={ROUTES.LEAVE_STATISTICS}
+        element={
+          <PermissionRoute permissions={['can_manage_leave', 'can_approve_leave']}>
+            <AppLayout>
+              <LeaveStatistics />
             </AppLayout>
           </PermissionRoute>
         }

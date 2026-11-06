@@ -11,5 +11,19 @@ from app.models.salary_history import SalaryHistory, BaseSalaryConfig
 from app.models.shift_rate_config import ShiftRateConfig
 from app.models.training import Training
 from app.models.contract import Contract, ContractAppendix, ContractType, ContractStatus, ContractAppendixChangeType
+from app.models.personnel_profile import (
+    VcProfile,
+    VcTrainingRecord,
+    VcWorkExperience,
+    VcSalaryLog,
+    VcFamilyRelation,
+    VcReward,
+    VcDiscipline,
+    VcAnnualEvaluation,
+    VcAssetDeclaration,
+)
+from app.models.personnel_alert import VcPersonnelAlert, AlertCategory, AlertWorkflowStatus
+from app.models.mobile_ess import MobileEssSchedule, MobileEssLeaveRequest, MobileEssOvertimeRequest
+
 
 

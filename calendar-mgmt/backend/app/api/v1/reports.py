@@ -145,3 +145,21 @@ async def finalize_monthly_summary(
     token = current_user.get("_token", "")
     return await report_service.finalize_monthly_summary(db, month=month_date, token=token)
 
+
+@router.post("/monthly-summary/unfinalize")
+async def unfinalize_monthly_summary(
+    month: str = Query(..., description="Tháng dạng YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    is_super_admin = bool(
+        current_user.get("is_super_admin")
+        or current_user.get("role") in ("admin", "superadmin", "super_admin")
+    )
+    if not is_super_admin:
+        raise ForbiddenError(detail="Chỉ Super Admin mới có quyền mở khoá bảng công đã chốt")
+    month_date = _parse_month(month)
+    if not month_date:
+        raise ValidationError(detail="Tháng không hợp lệ")
+    return await report_service.unfinalize_monthly_summary(db, month=month_date)
+

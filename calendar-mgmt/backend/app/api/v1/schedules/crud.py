@@ -225,6 +225,71 @@ async def bulk_create_schedules(
     return result
 
 
+@router.post("/copy-week")
+async def copy_previous_week_schedules(
+    target_start_date: date = Query(..., description="Ngày đầu tuần đích (YYYY-MM-DD)"),
+    department_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    perms: dict = Depends(RequirePermission('can_create_schedule')),
+):
+    from datetime import timedelta
+    from app.services.leave_service import LeaveService
+    await LeaveService.check_month_finalized(db, target_start_date)
+
+    source_start = target_start_date - timedelta(days=7)
+    source_end = target_start_date - timedelta(days=1)
+    auth_token = current_user.get("_token", "")
+
+    src_res = await db.execute(
+        select(Schedule).where(
+            Schedule.date >= source_start,
+            Schedule.date <= source_end,
+            Schedule.status != ScheduleStatus.CANCELLED,
+            Schedule.is_overtime == False,
+        )
+    )
+    src_schedules = src_res.scalars().all()
+    if not src_schedules:
+        return {"created": 0, "skipped": 0, "message": "Không có lịch trực nào ở tuần trước để sao chép"}
+
+    emp_ids = list({str(s.employee_id) for s in src_schedules})
+    emp_map = await hr_client.get_employees_batch(emp_ids, token=auth_token) if emp_ids else {}
+
+    created_count = 0
+    skipped_count = 0
+    for s in src_schedules:
+        emp = emp_map.get(str(s.employee_id), {}) or {}
+        if department_id and str(emp.get("department_id")) != str(department_id):
+            continue
+        if not await check_scope_for_employee(perms, current_user, str(s.employee_id), auth_token):
+            continue
+        new_date = s.date + timedelta(days=7)
+        try:
+            async with db.begin_nested():
+                await create_schedule_service(
+                    db,
+                    employee_id=s.employee_id,
+                    shift_template_id=s.shift_template_id,
+                    workplace_id=s.workplace_id,
+                    schedule_date=new_date,
+                    notes=s.notes,
+                    created_by=current_user,
+                    auth_token=auth_token,
+                    auto_approve=False,
+                )
+                created_count += 1
+        except Exception:
+            skipped_count += 1
+
+    await db.commit()
+    return {
+        "created": created_count,
+        "skipped": skipped_count,
+        "message": f"Đã sao chép thành công {created_count} ca trực từ tuần trước (Bỏ qua {skipped_count} ca trùng hoặc nhân viên nghỉ phép)",
+    }
+
+
 @router.put("/{schedule_id}", response_model=ScheduleResponse)
 async def update_schedule(
     schedule_id: str,

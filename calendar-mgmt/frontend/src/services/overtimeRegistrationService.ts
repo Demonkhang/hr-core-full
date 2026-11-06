@@ -2,7 +2,36 @@ import apiClient from './apiClient';
 import { API_ENDPOINTS } from '@/utils/apiEndpoints';
 import type { OvertimeRegistration, OvertimeRegistrationCreate } from '@/types/overtimeRegistration';
 
+export interface OvertimeStatisticItem {
+  employee_id: string;
+  employee_name: string;
+  employee_code?: string;
+  department_id?: string;
+  department_name?: string;
+  year: number;
+  month: number;
+  month_approved_hours: number;
+  month_pending_hours: number;
+  month_count: number;
+  month_limit: number;
+  month_remaining_hours: number;
+  year_approved_hours: number;
+  year_pending_hours: number;
+  year_count: number;
+  year_limit: number;
+  year_remaining_hours: number;
+}
+
 export const overtimeRegistrationService = {
+  async getStatistics(params?: {
+    year?: number;
+    month?: number;
+    employee_id?: string;
+    department_id?: string | string[];
+  }): Promise<OvertimeStatisticItem[]> {
+    const res = await apiClient.get('/overtime-registrations/statistics', { params });
+    return res.data;
+  },
   async list(params?: {
     employee_id?: string;
     department_id?: string | string[];

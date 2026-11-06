@@ -41,6 +41,9 @@ async def create_schedule(
         if emp_dept_id and emp_dept_id not in shift_dept_ids:
             raise BadRequestError(f"Nhân viên {emp.get('full_name', '')} không thuộc phòng ban được cấu hình cho ca trực này")
 
+    from app.services.leave_service import LeaveService
+    await LeaveService.check_month_finalized(db, schedule_date)
+
     from app.models.leave_registration import LeaveRegistration, LeaveRegistrationStatus
     leave_check = await db.execute(
         select(LeaveRegistration).where(
@@ -51,9 +54,9 @@ async def create_schedule(
             LeaveRegistration.is_active == True
         )
     )
-    active_leave = leave_check.scalar_one_or_none()
+    active_leave = leave_check.scalars().first()
     if active_leave:
-        raise ConflictError("Nhân viên đang nghỉ phép trong ngày này")
+        raise ConflictError(f"Nhân viên {emp.get('full_name', '')} đã có đơn nghỉ phép được duyệt trong ngày {schedule_date.strftime('%d/%m/%Y')}. Không thể xếp ca trực.")
 
     existing = await db.execute(
         select(Schedule).where(

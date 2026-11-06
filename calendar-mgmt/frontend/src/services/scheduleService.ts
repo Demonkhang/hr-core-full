@@ -81,4 +81,11 @@ export const scheduleService = {
   async delete(scheduleId: string): Promise<void> {
     await apiClient.delete(API_ENDPOINTS.SCHEDULE(scheduleId));
   },
+
+  async copyPreviousWeek(targetStartDate: string, departmentId?: string): Promise<{ created: number; skipped: number; message: string }> {
+    const res = await apiClient.post(`${API_ENDPOINTS.SCHEDULES}/copy-week`, null, {
+      params: { target_start_date: targetStartDate, department_id: departmentId },
+    });
+    return res.data;
+  },
 };

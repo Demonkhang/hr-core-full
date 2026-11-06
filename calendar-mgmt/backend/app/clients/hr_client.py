@@ -43,20 +43,21 @@ class HRClient:
         if cached:
             return cached
         try:
-            headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/employees/{employee_id}",
-                headers=headers,
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                self._cache_set(cache_key, data)
-                return data
-            elif resp.status_code == 404:
-                return None
-            logger.warning(f"HR employee fetch failed: {resp.status_code}")
-            return None
+            if token:
+                headers = {"Authorization": f"Bearer {token}"}
+                resp = await self._client.get(
+                    f"{self.base_url}/api/v1/employees/{employee_id}",
+                    headers=headers,
+                    timeout=5,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    self._cache_set(cache_key, data)
+                    return data
+                elif resp.status_code == 404:
+                    return None
+            batch = await self.get_employees_batch([str(employee_id)], token=token)
+            return batch.get(str(employee_id))
         except httpx.RequestError as e:
             logger.error(f"HR Core unavailable: {e}")
             return None

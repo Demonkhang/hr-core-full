@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Empty, Select, Modal, Button, Space, message, Collapse, Tag, Typography, DatePicker, Segmented, Tooltip } from 'antd';
-import { LeftOutlined, RightOutlined, LockOutlined, PlusOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Empty, Select, Modal, Button, Space, message, Collapse, Tag, Typography, DatePicker, Segmented, Tooltip, Popconfirm } from 'antd';
+import { LeftOutlined, RightOutlined, LockOutlined, PlusOutlined, UserOutlined, CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getSchedulesForDate } from '@/utils/scheduleHelpers';
 import { DATE_FORMATS, MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, SCOPE, ROUTES } from '@/utils/constants';
@@ -47,6 +47,7 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [activeTab, setActiveTab] = useState('office');
+  const [copyingWeek, setCopyingWeek] = useState(false);
   const user = useAuthStore((s) => s.user);
   const canCreateSchedule = user?.is_super_admin || user?.permissions?.can_create_schedule;
   const userScope = user?.permissions?.scope;
@@ -296,6 +297,24 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
     onDateChange(sidebarDateObj.add(1, 'week').format(DATE_FORMATS.ISO_DATE));
   };
 
+  const handleCopyPreviousWeek = async () => {
+    setCopyingWeek(true);
+    try {
+      const targetMondayStr = sidebarMonday.format(DATE_FORMATS.ISO_DATE);
+      const deptId = selectedDept.length === 1 ? selectedDept[0] : undefined;
+      const res = await scheduleService.copyPreviousWeek({
+        target_monday: targetMondayStr,
+        department_id: deptId,
+      });
+      message.success(res.message || `Đã sao chép ${res.copied_count} ca trực`);
+      await onRefresh?.();
+    } catch (err: any) {
+      message.error(err?.response?.data?.detail || 'Không thể sao chép lịch tuần trước');
+    } finally {
+      setCopyingWeek(false);
+    }
+  };
+
   return (
     <Card
       size="small"
@@ -357,6 +376,25 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
             >
               Đăng ký lịch
             </Button>
+          )}
+          {canCreateSchedule && (
+            <Popconfirm
+              title={`Sao chép lịch tuần trước sang tuần (${sidebarMonday.format('DD/MM')} - ${sidebarSunday.format('DD/MM')})?`}
+              description="Tự động bỏ qua các nhân viên đã có lịch hoặc có đơn nghỉ phép đã duyệt."
+              onConfirm={handleCopyPreviousWeek}
+              okText="Sao chép"
+              cancelText="Huỷ"
+              disabled={isSidebarDateInPast}
+            >
+              <Button
+                size="small"
+                icon={<CopyOutlined />}
+                loading={copyingWeek}
+                disabled={isSidebarDateInPast}
+              >
+                Sao chép tuần trước
+              </Button>
+            </Popconfirm>
           )}
           <Button
             size="small"

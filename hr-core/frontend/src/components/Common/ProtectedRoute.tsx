@@ -10,14 +10,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, loadUser } = useAuthStore();
   const [checked, setChecked] = useState(false);
 
-  /** Khi chưa xác thực, gọi loadUser để kiểm tra token còn hạn không */
+  /** Khi chưa xác thực hoặc thiếu thông tin chức vụ mới, gọi loadUser để đồng bộ từ server */
   useEffect(() => {
-    if (!isAuthenticated && !isLoading) {
+    if ((!isAuthenticated || typeof user?.is_management_position !== 'boolean') && !isLoading) {
       loadUser().finally(() => setChecked(true));
     } else {
       setChecked(true);
     }
-  }, [isAuthenticated, isLoading, loadUser]);
+  }, [isAuthenticated, isLoading, loadUser, user?.is_management_position]);
 
   if (isLoading || !checked) {
     return (

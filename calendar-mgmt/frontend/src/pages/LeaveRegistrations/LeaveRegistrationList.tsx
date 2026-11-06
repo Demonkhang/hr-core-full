@@ -41,6 +41,54 @@ const SESSION_LABELS: Record<string, string> = {
   full: 'Cả ngày',
 };
 
+const PUBLIC_HOLIDAYS_MM_DD = new Set(['01-01', '04-30', '05-01', '09-02', '09-03']);
+const SPECIAL_HOLIDAYS_YYYY_MM_DD = new Set([
+  '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-04-07',
+  '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-04-26', '2026-04-27',
+  '2027-02-05', '2027-02-08', '2027-02-09', '2027-02-10', '2027-02-11', '2027-04-16',
+]);
+
+function isHolidayOrWeekend(d: dayjs.Dayjs): boolean {
+  const dow = d.day();
+  if (dow === 0 || dow === 6) return true;
+  if (PUBLIC_HOLIDAYS_MM_DD.has(d.format('MM-DD'))) return true;
+  if (SPECIAL_HOLIDAYS_YYYY_MM_DD.has(d.format('YYYY-MM-DD'))) return true;
+  return false;
+}
+
+function calculateLeaveDays(
+  startDate?: dayjs.Dayjs | null,
+  endDate?: dayjs.Dayjs | null,
+  startSession: string = 'full',
+  endSession: string = 'full'
+): number {
+  if (!startDate || !endDate) return 0;
+  const start = startDate.startOf('day');
+  const end = endDate.startOf('day');
+  if (start.isAfter(end)) return 0;
+
+  if (start.isSame(end, 'day')) {
+    if (isHolidayOrWeekend(start)) return 0;
+    return startSession === 'full' ? 1.0 : 0.5;
+  }
+
+  let total = 0;
+  let curr = start;
+  while (curr.isBefore(end, 'day') || curr.isSame(end, 'day')) {
+    if (!isHolidayOrWeekend(curr)) {
+      if (curr.isSame(start, 'day')) {
+        total += startSession === 'full' ? 1.0 : 0.5;
+      } else if (curr.isSame(end, 'day')) {
+        total += endSession === 'full' ? 1.0 : 0.5;
+      } else {
+        total += 1.0;
+      }
+    }
+    curr = curr.add(1, 'day');
+  }
+  return total;
+}
+
 export function LeaveRegistrationList() {
   const [registrations, setRegistrations] = useState<LeaveRegistration[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -58,9 +106,47 @@ export function LeaveRegistrationList() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const [form] = Form.useForm();
+  const watchedEmployeeId = Form.useWatch('employee_id', form);
+  const watchedLeaveType = Form.useWatch('leave_type', form);
+  const watchedStartDate = Form.useWatch('start_date', form);
+  const watchedEndDate = Form.useWatch('end_date', form);
+  const watchedStartSession = Form.useWatch('start_session', form);
+  const watchedEndSession = Form.useWatch('end_session', form);
+
   const user = useAuthStore((s) => s.user);
   const canManage = user?.is_super_admin || user?.permissions?.can_manage_leave;
   const canApprove = user?.is_super_admin || user?.permissions?.can_approve_leave;
+
+  const calculatedDays = useMemo(
+    () => calculateLeaveDays(watchedStartDate, watchedEndDate, watchedStartSession, watchedEndSession),
+    [watchedStartDate, watchedEndDate, watchedStartSession, watchedEndSession]
+  );
+
+  const ensureEmployeeBalance = useCallback(async (empId?: string, year?: number) => {
+    if (!empId) return;
+    const targetYear = year || dayjs().year();
+    try {
+      const b = await leaveBalanceService.getByEmployeeAndYear(empId, targetYear);
+      setBalancesMap((prev) => ({ ...prev, [empId]: b }));
+      if (empId === user?.employee_id) {
+        setMyBalance(b);
+      }
+    } catch {
+      // Ignore if employee balance cannot be fetched
+    }
+  }, [user?.employee_id]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    const targetEmpId = watchedEmployeeId || user?.employee_id;
+    const targetYear = watchedStartDate ? dayjs(watchedStartDate).year() : dayjs().year();
+    if (targetEmpId) {
+      const existing = balancesMap[targetEmpId];
+      if (!existing || existing.year !== targetYear) {
+        ensureEmployeeBalance(targetEmpId, targetYear);
+      }
+    }
+  }, [editingId, watchedEmployeeId, watchedStartDate, user?.employee_id, balancesMap, ensureEmployeeBalance]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -90,6 +176,8 @@ export function LeaveRegistrationList() {
         const myB = bMap[user.employee_id];
         if (myB) {
           setMyBalance(myB);
+        } else {
+          ensureEmployeeBalance(user.employee_id, currentYear);
         }
       }
     } catch {
@@ -97,7 +185,7 @@ export function LeaveRegistrationList() {
     } finally {
       setLoading(false);
     }
-  }, [canManage, canApprove, user]);
+  }, [canManage, canApprove, user, ensureEmployeeBalance]);
 
   const handleSingleApprove = async (id: string) => {
     try {
@@ -130,8 +218,9 @@ export function LeaveRegistrationList() {
   const openAdd = useCallback(() => {
     if (adding) return;
     form.resetFields();
+    const defaultEmpId = user?.employee_id || undefined;
     form.setFieldsValue({
-      employee_id: canManage ? undefined : user?.employee_id,
+      employee_id: defaultEmpId,
       leave_type: 'annual',
       start_date: dayjs(),
       end_date: dayjs(),
@@ -139,9 +228,12 @@ export function LeaveRegistrationList() {
       end_session: 'full',
       reason: '',
     });
+    if (defaultEmpId) {
+      ensureEmployeeBalance(defaultEmpId, dayjs().year());
+    }
     setAdding(true);
     setEditingId('new');
-  }, [adding, canManage, user, form]);
+  }, [adding, user, form, ensureEmployeeBalance]);
 
   useKeyboardShortcut('n', openAdd, !adding);
 
@@ -162,8 +254,33 @@ export function LeaveRegistrationList() {
   const handleSave = useCallback(async (id: string) => {
     try {
       const values = await form.validateFields();
+      const targetEmpId = values.employee_id || user?.employee_id;
+      const days = calculateLeaveDays(values.start_date, values.end_date, values.start_session, values.end_session);
+      if (days <= 0) {
+        message.error('Số ngày nghỉ tính ra phải lớn hơn 0 (không tính Thứ 7, Chủ nhật)');
+        return;
+      }
+
+      const empBalance = targetEmpId ? balancesMap[targetEmpId] : undefined;
+      if (values.leave_type === 'annual' && empBalance && days > empBalance.remaining) {
+        message.error(`Không đủ ngày phép năm (Yêu cầu: ${days} ngày, Quỹ phép còn lại: ${empBalance.remaining.toFixed(1)} ngày)`);
+        return;
+      }
+      if (values.leave_type === 'personal_paid' && days > 3) {
+        message.error('Theo Khoản 1 Điều 115 Bộ luật Lao động, nghỉ việc riêng hưởng nguyên lương tối đa 03 ngày/lần (Kết hôn: 3 ngày; Con kết hôn: 1 ngày; Tang chế: 3 ngày).');
+        return;
+      }
+      if (values.leave_type === 'sick' && empBalance) {
+        const maxSick = empBalance.max_sick_days || 30;
+        const remainSick = Math.max(0, maxSick - (empBalance.sick_days || 0));
+        if (days > remainSick) {
+          message.error(`Vượt quá định mức nghỉ ốm hưởng BHXH trong năm (Còn tối đa: ${remainSick.toFixed(1)}/${maxSick} ngày)`);
+          return;
+        }
+      }
+
       const payload: any = {
-        employee_id: values.employee_id || user?.employee_id,
+        employee_id: targetEmpId,
         start_date: values.start_date ? dayjs(values.start_date).format('YYYY-MM-DD') : undefined,
         end_date: values.end_date ? dayjs(values.end_date).format('YYYY-MM-DD') : undefined,
         start_session: values.start_session,
@@ -187,7 +304,7 @@ export function LeaveRegistrationList() {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.detail || 'Lỗi khi lưu');
     }
-  }, [form, user, fetchData]);
+  }, [form, user, balancesMap, fetchData]);
 
   const handleDelete = useCallback(async (id: string) => {
     try {
@@ -346,35 +463,195 @@ export function LeaveRegistrationList() {
       },
     },
     {
-      title: 'Số ngày', dataIndex: 'total_days', key: 'total_days', width: 90,
+      title: 'Số ngày', dataIndex: 'total_days', key: 'total_days', width: 100,
       render: (v: number, record: LeaveRegistration) => {
         if (isEditing(record)) {
-          return record.id === 'new' ? (
-            <Typography.Text type="secondary" style={{ fontSize: '12px' }}>Tự động</Typography.Text>
-          ) : (
-            <Typography.Text strong>{v}</Typography.Text>
+          return (
+            <Typography.Text strong style={{ color: calculatedDays > 0 ? '#1890ff' : '#ff4d4f' }}>
+              {calculatedDays > 0 ? `${calculatedDays} ngày` : '0 ngày'}
+            </Typography.Text>
           );
         }
         return <Typography.Text strong>{v}</Typography.Text>;
       },
     },
     {
-      title: 'Ngày phép còn lại', key: 'remaining', width: 130,
+      title: 'Ngày phép còn lại', key: 'remaining', width: 195,
       render: (_: any, record: LeaveRegistration) => {
-        const balance = balancesMap[record.employee_id];
-        if (!balance) return <Typography.Text type="secondary">-</Typography.Text>;
-        const remaining = balance.remaining;
-        const color = remaining <= 0 ? '#ff4d4f' : remaining <= 3 ? '#faad14' : '#52c41a';
-        return <Typography.Text style={{ color, fontWeight: 600 }}>{remaining.toFixed(1)}</Typography.Text>;
+        const editing = isEditing(record);
+        const activeType = editing ? (watchedLeaveType || record.leave_type) : record.leave_type;
+        const empId = editing ? (watchedEmployeeId || record.employee_id || user?.employee_id) : record.employee_id;
+        const balance = empId ? balancesMap[empId] : undefined;
+
+        // 1. Chế độ Nghỉ phép năm (Điều 113, 114 BLLĐ 2019)
+        if (activeType === 'annual') {
+          if (!balance) return <Typography.Text type="secondary">-</Typography.Text>;
+          const remaining = balance.remaining;
+          const pending = balance.pending_days || 0;
+          const color = remaining <= 0 ? '#ff4d4f' : remaining <= 3 ? '#faad14' : '#52c41a';
+
+          if (editing) {
+            const afterDeduct = remaining - calculatedDays;
+            const afterColor = afterDeduct < 0 ? '#ff4d4f' : afterDeduct <= 3 ? '#faad14' : '#52c41a';
+            return (
+              <Space direction="vertical" size={0}>
+                <Typography.Text style={{ color, fontWeight: 600 }}>
+                  {remaining.toFixed(1)} ngày
+                </Typography.Text>
+                {calculatedDays > 0 && (
+                  <Typography.Text style={{ fontSize: 12, color: afterColor }}>
+                    {afterDeduct < 0 ? (
+                      <b>Vượt quỹ phép ({afterDeduct.toFixed(1)})!</b>
+                    ) : (
+                      <>Sau đơn này: <b>{afterDeduct.toFixed(1)}</b></>
+                    )}
+                  </Typography.Text>
+                )}
+                {pending > 0 && (
+                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                    (Chờ duyệt: {pending.toFixed(1)})
+                  </Typography.Text>
+                )}
+              </Space>
+            );
+          }
+
+          return (
+            <Tooltip
+              title={`Quỹ phép năm (Điều 113 BLLĐ): Tổng ${(balance.total_allocated + balance.carried_over).toFixed(1)} ngày | Đã nghỉ: ${balance.used.toFixed(1)} ngày${pending > 0 ? ` | Chờ duyệt: ${pending.toFixed(1)} ngày` : ''}`}
+            >
+              <Typography.Text style={{ color, fontWeight: 600 }}>{remaining.toFixed(1)} ngày</Typography.Text>
+            </Tooltip>
+          );
+        }
+
+        // 2. Chế độ Việc riêng có lương (Khoản 1 Điều 115 BLLĐ 2019)
+        if (activeType === 'personal_paid') {
+          const usedPersonalPaid = balance?.personal_paid_days || 0;
+          const isOverLimit = editing && calculatedDays > 3;
+          if (editing) {
+            return (
+              <Tooltip title="Theo Khoản 1 Điều 115 BLLĐ: Bản thân kết hôn (tối đa 3 ngày); Con kết hôn (tối đa 1 ngày); Tang chế tứ thân phụ mẫu, vợ/chồng, con (tối đa 3 ngày). Hưởng 100% lương, không trừ phép năm.">
+                <Space direction="vertical" size={0}>
+                  <Tag color={isOverLimit ? 'error' : 'blue'} style={{ margin: 0, fontWeight: 600 }}>
+                    Tối đa 3 ngày/lần
+                  </Tag>
+                  <Typography.Text
+                    style={{ fontSize: 11, color: isOverLimit ? '#ff4d4f' : '#64748b' }}
+                  >
+                    {isOverLimit
+                      ? 'Vượt trần 3 ngày (Đ.115 BLLĐ)!'
+                      : `Không trừ phép • Đã nghỉ: ${usedPersonalPaid.toFixed(1)} ngày`}
+                  </Typography.Text>
+                </Space>
+              </Tooltip>
+            );
+          }
+          return (
+            <Tooltip title="Chế độ việc riêng hưởng nguyên lương (Khoản 1 Điều 115 BLLĐ: Tối đa 1–3 ngày/sự kiện, không trừ quỹ phép năm)">
+              <Tag color="blue" style={{ margin: 0 }}>Không trừ phép (Đ.115)</Tag>
+            </Tooltip>
+          );
+        }
+
+        // 3. Chế độ Nghỉ ốm (Điều 26 Luật BHXH)
+        if (activeType === 'sick') {
+          const maxSick = balance?.max_sick_days || 30;
+          const usedSick = balance?.sick_days || 0;
+          const remainSick = Math.max(0, maxSick - usedSick);
+          const isOverSick = editing && calculatedDays > remainSick;
+          if (editing) {
+            return (
+              <Tooltip title={`Theo Điều 26 Luật BHXH: Tối đa ${maxSick} ngày/năm hưởng BHXH (75% lương đóng BHXH khi có giấy chứng nhận nghỉ hưởng BHXH). Không trừ quỹ phép năm.`}>
+                <Space direction="vertical" size={0}>
+                  <Tag color={isOverSick ? 'error' : 'cyan'} style={{ margin: 0, fontWeight: 600 }}>
+                    Còn {remainSick.toFixed(1)} / {maxSick} ngày (BHXH)
+                  </Tag>
+                  <Typography.Text style={{ fontSize: 11, color: isOverSick ? '#ff4d4f' : '#64748b' }}>
+                    {isOverSick
+                      ? 'Vượt định mức ốm BHXH năm!'
+                      : `Không trừ phép • Đã nghỉ ốm: ${usedSick.toFixed(1)} ngày`}
+                  </Typography.Text>
+                </Space>
+              </Tooltip>
+            );
+          }
+          return (
+            <Tooltip title={`Chế độ ốm đau hưởng BHXH (Điều 26 Luật BHXH: Tối đa ${maxSick} ngày/năm, không trừ quỹ phép năm)`}>
+              <Tag color="cyan" style={{ margin: 0 }}>Chế độ BHXH (Ốm)</Tag>
+            </Tooltip>
+          );
+        }
+
+        // 4. Chế độ Nghỉ không lương (Khoản 2, 3 Điều 115 BLLĐ 2019)
+        if (activeType === 'personal_unpaid') {
+          const usedUnpaid = balance?.personal_unpaid_days || 0;
+          if (editing) {
+            return (
+              <Tooltip title="Theo Khoản 2, 3 Điều 115 BLLĐ: Nghỉ không hưởng lương theo thông báo hoặc thỏa thuận với người sử dụng lao động. Không trừ quỹ phép năm.">
+                <Space direction="vertical" size={0}>
+                  <Tag color="default" style={{ margin: 0, fontWeight: 600 }}>
+                    Theo thỏa thuận
+                  </Tag>
+                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                    Không trừ phép • Đã nghỉ: {usedUnpaid.toFixed(1)} ngày
+                  </Typography.Text>
+                </Space>
+              </Tooltip>
+            );
+          }
+          return (
+            <Tooltip title="Nghỉ không hưởng lương theo thỏa thuận (Điều 115 BLLĐ, không trừ quỹ phép năm)">
+              <Tag color="default" style={{ margin: 0 }}>Không trừ phép (KL)</Tag>
+            </Tooltip>
+          );
+        }
+
+        // 5. Chế độ Nghỉ thai sản (Điều 139 BLLĐ 2019 & Luật BHXH)
+        if (activeType === 'maternity') {
+          const usedMaternity = balance?.maternity_days || 0;
+          const isOverMaternity = editing && calculatedDays > 240;
+          if (editing) {
+            return (
+              <Tooltip title="Theo Điều 139 BLLĐ & Luật BHXH: Lao động nữ sinh con nghỉ 06 tháng (~180 ngày, thêm 30 ngày/con nếu sinh đôi trở lên); Lao động nam có vợ sinh con nghỉ 5–14 ngày; Khám thai 1–2 ngày/lần. Không trừ quỹ phép năm.">
+                <Space direction="vertical" size={0}>
+                  <Tag color={isOverMaternity ? 'error' : 'magenta'} style={{ margin: 0, fontWeight: 600 }}>
+                    Tối đa 180 ngày (BHXH)
+                  </Tag>
+                  <Typography.Text style={{ fontSize: 11, color: isOverMaternity ? '#ff4d4f' : '#64748b' }}>
+                    {isOverMaternity
+                      ? 'Vượt định mức thai sản!'
+                      : `Không trừ phép • Đã nghỉ: ${usedMaternity.toFixed(1)} ngày`}
+                  </Typography.Text>
+                </Space>
+              </Tooltip>
+            );
+          }
+          return (
+            <Tooltip title="Chế độ Thai sản hưởng BHXH (Điều 139 BLLĐ & Luật BHXH, không trừ quỹ phép năm)">
+              <Tag color="magenta" style={{ margin: 0 }}>Chế độ BHXH (Thai sản)</Tag>
+            </Tooltip>
+          );
+        }
+
+        return <Typography.Text type="secondary">-</Typography.Text>;
       },
     },
     {
       title: 'Lý do', dataIndex: 'reason', key: 'reason', width: 220, ellipsis: true,
       render: (v: string | null, record: LeaveRegistration) => {
         if (isEditing(record)) {
+          const activeType = watchedLeaveType || record.leave_type;
+          const reasonPlaceholders: Record<string, string> = {
+            annual: 'Lý do nghỉ phép năm...',
+            personal_paid: 'Ghi rõ sự kiện (Kết hôn: 3 ngày, Con kết hôn: 1 ngày, Tang chế: 3 ngày)...',
+            sick: 'Ghi rõ lý do khám/chữa bệnh (kèm giấy nghỉ hưởng BHXH)...',
+            personal_unpaid: 'Lý do xin nghỉ không hưởng lương...',
+            maternity: 'Sinh con (6 tháng) / Vợ sinh con (5-14 ngày) / Khám thai...',
+          };
           return (
             <Form.Item name="reason" style={{ margin: 0 }}>
-              <Input.TextArea rows={2} placeholder="Lý do nghỉ..." />
+              <Input.TextArea rows={2} placeholder={reasonPlaceholders[activeType] || 'Lý do nghỉ...'} />
             </Form.Item>
           );
         }
@@ -459,7 +736,15 @@ export function LeaveRegistrationList() {
         );
       },
     },
-  ], [editingId, employees, canManage, canApprove, user, handleSave, cancel, handleDelete, balancesMap, handleSingleApprove]);
+  ], [editingId, employees, canManage, canApprove, user, handleSave, cancel, handleDelete, balancesMap, handleSingleApprove, calculatedDays, watchedEmployeeId, watchedLeaveType]);
+
+  const activeBannerBalance = useMemo(() => {
+    if (editingId) {
+      const empId = watchedEmployeeId || user?.employee_id;
+      if (empId && balancesMap[empId]) return balancesMap[empId];
+    }
+    return myBalance;
+  }, [editingId, watchedEmployeeId, user?.employee_id, balancesMap, myBalance]);
 
   const newRow = {
     id: 'new',
@@ -482,9 +767,35 @@ export function LeaveRegistrationList() {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
-        {!canManage && myBalance && (
+        {activeBannerBalance && (
           <Typography.Text type="secondary" style={{ marginRight: 'auto' }}>
-            Phép năm {dayjs().year()}: Tổng <b>{myBalance.total_allocated.toFixed(1)}</b> ngày, đã dùng <b>{myBalance.used.toFixed(1)}</b> ngày, còn lại <b style={{ color: '#1890ff' }}>{myBalance.remaining.toFixed(1)}</b> ngày.
+            {(!editingId || !watchedLeaveType || watchedLeaveType === 'annual') && (
+              <>
+                Quỹ phép năm {activeBannerBalance.employee_name ? `của ${activeBannerBalance.employee_name} ` : ''}({activeBannerBalance.year}): Tổng <b>{(activeBannerBalance.total_allocated + activeBannerBalance.carried_over).toFixed(1)}</b> ngày, đã nghỉ <b>{activeBannerBalance.used.toFixed(1)}</b> ngày
+                {(activeBannerBalance.pending_days || 0) > 0 && <>, chờ duyệt <b style={{ color: '#faad14' }}>{(activeBannerBalance.pending_days || 0).toFixed(1)}</b> ngày</>}
+                , còn lại <b style={{ color: '#10b981' }}>{activeBannerBalance.remaining.toFixed(1)}</b> ngày.
+              </>
+            )}
+            {editingId && watchedLeaveType === 'personal_paid' && (
+              <>
+                <b>Chế độ Việc riêng có lương (Khoản 1 Điều 115 BLLĐ):</b> Kết hôn <b>tối đa 03 ngày</b>; Con kết hôn <b>01 ngày</b>; Tang chế (cha/mẹ hai bên, vợ/chồng, con) <b>03 ngày</b>. <span style={{ color: '#2563eb' }}>Không trừ quỹ phép năm</span> (Đã nghỉ năm {activeBannerBalance.year}: <b>{(activeBannerBalance.personal_paid_days || 0).toFixed(1)}</b> ngày).
+              </>
+            )}
+            {editingId && watchedLeaveType === 'sick' && (
+              <>
+                <b>Chế độ Nghỉ ốm (Điều 26 Luật BHXH):</b> Hưởng BHXH tối đa <b>{activeBannerBalance.max_sick_days || 30} ngày/năm</b> (cần giấy nghỉ hưởng BHXH). <span style={{ color: '#0891b2' }}>Không trừ quỹ phép năm</span> (Đã nghỉ ốm năm {activeBannerBalance.year}: <b>{(activeBannerBalance.sick_days || 0).toFixed(1)}</b> ngày, còn tối đa <b>{Math.max(0, (activeBannerBalance.max_sick_days || 30) - (activeBannerBalance.sick_days || 0)).toFixed(1)}</b> ngày).
+              </>
+            )}
+            {editingId && watchedLeaveType === 'personal_unpaid' && (
+              <>
+                <b>Chế độ Nghỉ không hưởng lương (Khoản 2, 3 Điều 115 BLLĐ):</b> Nghỉ theo thông báo/thỏa thuận với quản lý, <b>không hưởng lương và không trừ quỹ phép năm</b> (Đã nghỉ năm {activeBannerBalance.year}: <b>{(activeBannerBalance.personal_unpaid_days || 0).toFixed(1)}</b> ngày).
+              </>
+            )}
+            {editingId && watchedLeaveType === 'maternity' && (
+              <>
+                <b>Chế độ Thai sản (Điều 139 BLLĐ & Luật BHXH):</b> Nữ sinh con nghỉ tối đa <b>06 tháng (~180 ngày)</b>; Nam khi vợ sinh con nghỉ <b>05–14 ngày làm việc</b>; Khám thai <b>1–2 ngày/lần</b>. <span style={{ color: '#db2777' }}>Không trừ quỹ phép năm</span> (Đã nghỉ năm {activeBannerBalance.year}: <b>{(activeBannerBalance.maternity_days || 0).toFixed(1)}</b> ngày).
+              </>
+            )}
           </Typography.Text>
         )}
         {editingId ? (

@@ -18,6 +18,11 @@ import { UserList } from '@/pages/Users/UserList';
 import { WorkplaceDetail } from '@/pages/Workplaces/WorkplaceDetail';
 import { AuditLogList } from '@/pages/Audit/AuditLogList';
 import { ContractList } from '@/pages/Contracts/ContractList';
+import { PersonnelProfileList } from '@/pages/PersonnelProfiles/PersonnelProfileList';
+import { PersonnelProfileDetail } from '@/pages/PersonnelProfiles/PersonnelProfileDetail';
+import { PersonnelAlertWorkbench } from '@/pages/PersonnelAlerts/PersonnelAlertWorkbench';
+import { SpecialistMobilePortal } from '@/pages/MobileEss/SpecialistMobilePortal';
+
 
 
 import { ROUTES } from '@/utils/constants';
@@ -172,7 +177,46 @@ function App() {
           </PermissionRoute>
         }
       />
+      <Route
+        path={ROUTES.PERSONNEL_PROFILES}
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PersonnelProfileList />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.PERSONNEL_PROFILE_DETAIL(':userId')}
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PersonnelProfileDetail />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.PERSONNEL_ALERTS}
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PersonnelAlertWorkbench />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.MOBILE_ESS}
+        element={
+          <ProtectedRoute>
+            <SpecialistMobilePortal />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+
     </Routes>
   );
 }

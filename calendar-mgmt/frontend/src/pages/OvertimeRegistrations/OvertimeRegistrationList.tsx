@@ -61,6 +61,7 @@ export function OvertimeRegistrationList() {
   const [modalForm] = Form.useForm();
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [checkingConflict, setCheckingConflict] = useState(false);
+  const [empOtStat, setEmpOtStat] = useState<{ month_total: number; year_total: number; month: number; year: number } | null>(null);
 
   // Detail modal state
   const [detailOpen, setDetailOpen] = useState(false);
@@ -135,12 +136,28 @@ export function OvertimeRegistrationList() {
 
     setCheckingConflict(true);
     try {
-      const res = await overtimeRegistrationService.checkConflict({
-        employee_id,
-        date: dayjs(dateVal).format('YYYY-MM-DD'),
-        start_time: dayjs(startVal).format('HH:mm:ss'),
-        end_time: dayjs(endVal).format('HH:mm:ss'),
-      });
+      const targetYear = dayjs(dateVal).year();
+      const targetMonth = dayjs(dateVal).month() + 1;
+      const [res, stats] = await Promise.all([
+        overtimeRegistrationService.checkConflict({
+          employee_id,
+          date: dayjs(dateVal).format('YYYY-MM-DD'),
+          start_time: dayjs(startVal).format('HH:mm:ss'),
+          end_time: dayjs(endVal).format('HH:mm:ss'),
+        }),
+        overtimeRegistrationService.getStatistics({ year: targetYear, month: targetMonth }).catch(() => []),
+      ]);
+      const foundStat = stats.find((s) => s.employee_id === employee_id);
+      if (foundStat) {
+        setEmpOtStat({
+          month_total: foundStat.month_total_hours,
+          year_total: foundStat.year_total_hours,
+          month: targetMonth,
+          year: targetYear,
+        });
+      } else {
+        setEmpOtStat({ month_total: 0, year_total: 0, month: targetMonth, year: targetYear });
+      }
       if (res.has_conflict && res.conflict) {
         setConflictWarning(res.conflict.message);
       } else {
@@ -688,6 +705,41 @@ export function OvertimeRegistrationList() {
         width={560}
         destroyOnClose
       >
+        {/* Statutory OT Quota Banner (Điều 107 BLLĐ 2019) */}
+        {empOtStat && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '10px 14px',
+              background: empOtStat.month_total > 40 || empOtStat.year_total > 200 ? '#fef2f2' : '#f0f9ff',
+              border: `1px solid ${empOtStat.month_total > 40 || empOtStat.year_total > 200 ? '#fecaca' : '#bae6fd'}`,
+              borderRadius: 8,
+              fontSize: 13,
+              color: '#0f172a',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <span>
+              <strong>Hạn mức tăng ca (Điều 107 BLLĐ):</strong>
+            </span>
+            <span>
+              OT Tháng {empOtStat.month}:{' '}
+              <strong style={{ color: empOtStat.month_total >= 40 ? '#ef4444' : '#0284c7' }}>
+                {empOtStat.month_total} / 40h
+              </strong>
+              {'  |  '}
+              OT Năm {empOtStat.year}:{' '}
+              <strong style={{ color: empOtStat.year_total >= 200 ? '#ef4444' : '#10b981' }}>
+                {empOtStat.year_total} / 200h
+              </strong>
+            </span>
+          </div>
+        )}
+
         {/* Real-time Conflict Alert */}
         {conflictWarning && (
           <Alert

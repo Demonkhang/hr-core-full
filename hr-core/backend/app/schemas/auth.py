@@ -56,6 +56,9 @@ class UserInfo(BaseModel):
     is_super_admin: bool = False
     department_id: Optional[str] = None
     employee_id: Optional[str] = None
+    position_name: Optional[str] = None
+    position_code: Optional[str] = None
+    is_management_position: bool = False
     must_change_password: bool = False
     permissions: UserPermissions = UserPermissions()
 

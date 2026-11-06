@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
 import { setAccessToken, setRefreshToken } from '@/store/tokenManager';
 import { ROUTES, SUCCESS_MESSAGES, COLORS, ERROR_MESSAGES } from '@/utils/constants';
+import { shouldRedirectToMobileSpecialistPortal } from '@/utils/mobileRedirect';
 
 /** Trang đăng nhập, hiển thị form đăng nhập và modal đổi mật khẩu nếu cần */
 export function LoginPage() {
@@ -31,7 +32,7 @@ export function LoginPage() {
         return;
       }
       message.success(SUCCESS_MESSAGES.LOGIN_SUCCESS);
-      navigate(ROUTES.HOME);
+      navigate(shouldRedirectToMobileSpecialistPortal(user) ? ROUTES.MOBILE_ESS : ROUTES.HOME);
     } catch (err: any) {
       console.error('Login error:', err);
       console.error('Login error response:', err?.response);
@@ -65,7 +66,8 @@ export function LoginPage() {
       setLoginValues(null);
       setTempPassword('');
       setPasswordModalOpen(false);
-      navigate(ROUTES.HOME);
+      const currentUser = useAuthStore.getState().user;
+      navigate(shouldRedirectToMobileSpecialistPortal(currentUser) ? ROUTES.MOBILE_ESS : ROUTES.HOME);
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       const msg = Array.isArray(detail) ? detail[0]?.msg || detail[0] : detail;

@@ -16,6 +16,9 @@ export interface UserInfo {
   is_super_admin: boolean;
   department_id: string | null;
   employee_id: string | null;
+  position_name?: string | null;
+  position_code?: string | null;
+  is_management_position?: boolean;
   must_change_password?: boolean;
   permissions: UserPermissions;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Table, Tag, message, Typography } from 'antd';
+import { Table, Tag, message, Typography, Button } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { leaveRegistrationService } from '@/services/leaveRegistrationService';
 import type { LeaveRegistration } from '@/types/leave';
@@ -89,9 +90,34 @@ export function LeaveHistory() {
     },
   ], []);
 
+  const handleExportExcel = async () => {
+    try {
+      const XLSX = await import('xlsx');
+      const rows = registrations.map((r) => ({
+        'Nhân viên': r.employee_name || '-',
+        'Loại phép': LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type,
+        'Từ ngày': `${dayjs(r.start_date).format('DD/MM/YYYY')} (${SESSION_LABELS[r.start_session] || r.start_session})`,
+        'Đến ngày': `${dayjs(r.end_date).format('DD/MM/YYYY')} (${SESSION_LABELS[r.end_session] || r.end_session})`,
+        'Số ngày': r.total_days,
+        'Lý do': r.reason || '-',
+        'Trạng thái': STATUS_LABELS[r.status] || r.status,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Lich_su_nghi_phep');
+      XLSX.writeFile(wb, `Lich_su_nghi_phep_${dayjs().format('YYYYMMDD')}.xlsx`);
+      message.success('Xuất Excel thành công');
+    } catch {
+      message.error('Xuất Excel thất bại');
+    }
+  };
+
   return (
     <div>
-      <Typography.Title level={4} style={{ marginBottom: 16 }}>Lịch sử nghỉ phép</Typography.Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>Lịch sử nghỉ phép</Typography.Title>
+        <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>Xuất Excel</Button>
+      </div>
       <Table dataSource={registrations} columns={columns} rowKey="id" loading={loading} pagination={{ pageSize: 20 }} />
     </div>
   );

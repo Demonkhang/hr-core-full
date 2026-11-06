@@ -16,15 +16,20 @@ import {
   DollarOutlined,
   TableOutlined,
   FileTextOutlined,
+  IdcardOutlined,
+  BarChartOutlined,
+  BellOutlined,
   SunOutlined,
   MoonOutlined,
 } from '@ant-design/icons';
 
-import { useNavigate, useLocation } from 'react-router-dom';
+
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/context/ThemeContext';
 import { ROUTES, COLORS, BORDER_RADIUS } from '@/utils/constants';
 import { ProfileModal } from '@/components/Common/ProfileModal';
+import { shouldRedirectToMobileSpecialistPortal } from '@/utils/mobileRedirect';
 
 const { Sider, Content, Header } = Layout;
 
@@ -63,6 +68,29 @@ function buildMenuItems(perms: any): any[] {
     popupClassName: popupClass,
     children: hrChildren,
   });
+  items.push({
+    key: 'personnel-profiles-group',
+    icon: <IdcardOutlined />,
+    label: 'Hồ sơ lý lịch (BNV)',
+    popupClassName: popupClass,
+    children: [
+      { key: ROUTES.PERSONNEL_PROFILES, icon: <IdcardOutlined />, label: 'Danh sách hồ sơ' },
+      { key: `${ROUTES.PERSONNEL_PROFILES}?tab=charts`, icon: <BarChartOutlined />, label: 'Sơ đồ tổng hợp' },
+    ],
+  });
+  items.push({
+    key: 'personnel-alerts-group',
+    icon: <BellOutlined />,
+    label: 'Cảnh báo nghiệp vụ',
+    popupClassName: popupClass,
+    children: [
+      { key: ROUTES.PERSONNEL_ALERTS, icon: <BellOutlined />, label: 'Danh sách cảnh báo' },
+      { key: `${ROUTES.PERSONNEL_ALERTS}?tab=charts`, icon: <BarChartOutlined />, label: 'Thống kê & Sơ đồ' },
+      { key: `${ROUTES.PERSONNEL_ALERTS}?tab=profiles`, icon: <IdcardOutlined />, label: 'Sơ đồ Cá nhân (360°)' },
+    ],
+  });
+
+
   if (perms?.can_manage_users) {
     items.push({
       key: 'system',
@@ -91,7 +119,10 @@ const pageTitleMap: Record<string, string> = {
   [ROUTES.USERS]: 'Người dùng',
   [ROUTES.AUDIT_LOGS]: 'Nhật ký hoạt động',
   [ROUTES.BASE_SALARY_CONFIG]: 'Cấu hình lương',
+  [ROUTES.PERSONNEL_PROFILES]: 'Hồ sơ lý lịch viên chức (BNV)',
+  [ROUTES.PERSONNEL_ALERTS]: 'Bàn làm việc Cán bộ - Cảnh báo Đến hạn',
 };
+
 
 
 const PageTitleCtx = createContext<{ setPageTitle: (t: string) => void }>({ setPageTitle: () => {} });
@@ -129,6 +160,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     if (path.startsWith(ROUTES.EMPLOYEES) || path.startsWith(ROUTES.EMPLOYEES_INACTIVE)) {
       keys.push('hr');
     }
+    if (path.startsWith(ROUTES.PERSONNEL_PROFILES)) {
+      keys.push('personnel-profiles-group');
+    }
+    if (path.startsWith(ROUTES.PERSONNEL_ALERTS)) {
+      keys.push('personnel-alerts-group');
+    }
+
     if (path.startsWith(ROUTES.USERS) || path.startsWith(ROUTES.BASE_SALARY_CONFIG) || path.startsWith(ROUTES.AUDIT_LOGS)) {
       keys.push('system');
     }
@@ -136,6 +174,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
   });
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
+  const [redirectMobile, setRedirectMobile] = useState<boolean>(() =>
+    shouldRedirectToMobileSpecialistPortal(user),
+  );
+
+  useEffect(() => {
+    const checkDeviceAndRole = () => {
+      setRedirectMobile(shouldRedirectToMobileSpecialistPortal(user));
+    };
+    checkDeviceAndRole();
+    window.addEventListener('resize', checkDeviceAndRole);
+    return () => window.removeEventListener('resize', checkDeviceAndRole);
+  }, [user]);
 
   const currentTitle = titleOverrides[location.pathname] || getDefaultTitle(location.pathname);
 
@@ -145,6 +195,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     await logout();
     navigate(ROUTES.LOGIN);
   };
+
+  if (redirectMobile) {
+    return <Navigate to={ROUTES.MOBILE_ESS} replace />;
+  }
 
   return (
     <PageTitleCtx.Provider value={ctxValue}>
@@ -238,7 +292,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Menu
                 mode="inline"
                 theme={isDark ? 'dark' : 'light'}
-                selectedKeys={[location.pathname]}
+                selectedKeys={[
+                  location.pathname.startsWith(ROUTES.PERSONNEL_PROFILES)
+                    ? location.search.includes('tab=charts')
+                      ? `${ROUTES.PERSONNEL_PROFILES}?tab=charts`
+                      : ROUTES.PERSONNEL_PROFILES
+                    : location.pathname.startsWith(ROUTES.PERSONNEL_ALERTS)
+                    ? location.search.includes('tab=charts')
+                      ? `${ROUTES.PERSONNEL_ALERTS}?tab=charts`
+                      : location.search.includes('tab=profiles')
+                      ? `${ROUTES.PERSONNEL_ALERTS}?tab=profiles`
+                      : ROUTES.PERSONNEL_ALERTS
+                    : location.pathname,
+                ]}
+
                 openKeys={openKeys}
                 onOpenChange={setOpenKeys}
                 items={buildMenuItems(user?.permissions)}
