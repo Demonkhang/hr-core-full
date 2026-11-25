@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   JOB_POSITION: (id: string) => `/job-positions/${id}`,
   JOB_POSITIONS_EXPORT: '/job-positions/export',
   JOB_POSITIONS_IMPORT: '/job-positions/import',
+  JOB_POSITIONS_IMPORT_PREVIEW: '/job-positions/import/preview',
   JOB_POSITIONS_IMPORT_TEMPLATE: '/job-positions/import/template',
   WORKPLACES: '/workplaces',
   WORKPLACE: (id: string) => `/workplaces/${id}`,

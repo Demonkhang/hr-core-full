@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { setAccessToken, setRefreshToken } from '@/store/tokenManager';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { ProtectedRoute } from '@/components/Common/ProtectedRoute';
 import { PermissionRoute } from '@/components/Common/PermissionRoute';
@@ -23,16 +24,27 @@ import { DepartmentScheduleReport } from '@/pages/Reports/DepartmentScheduleRepo
 import { PermissionManagement } from '@/pages/Permissions/PermissionManagement';
 import { ROUTES } from '@/utils/constants';
 
+function consumeSsoTokensFromUrl() {
+  if (typeof window === 'undefined') return;
+  const urlParams = new URLSearchParams(window.location.search);
+  const ssoToken = urlParams.get('token');
+  const ssoRefresh = urlParams.get('refresh_token');
+  if (ssoToken) {
+    setAccessToken(ssoToken);
+    if (ssoRefresh) {
+      setRefreshToken(ssoRefresh);
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+consumeSsoTokensFromUrl();
+
 function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const ssoToken = urlParams.get('token');
-    if (ssoToken) {
-      localStorage.setItem('access_token', ssoToken);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    consumeSsoTokensFromUrl();
     const handleLogout = () => navigate(ROUTES.LOGIN, { replace: true });
     window.addEventListener('auth:logout', handleLogout);
     return () => window.removeEventListener('auth:logout', handleLogout);

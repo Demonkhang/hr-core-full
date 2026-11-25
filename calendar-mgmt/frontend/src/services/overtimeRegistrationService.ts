@@ -12,11 +12,13 @@ export interface OvertimeStatisticItem {
   month: number;
   month_approved_hours: number;
   month_pending_hours: number;
+  month_total_hours?: number;
   month_count: number;
   month_limit: number;
   month_remaining_hours: number;
   year_approved_hours: number;
   year_pending_hours: number;
+  year_total_hours?: number;
   year_count: number;
   year_limit: number;
   year_remaining_hours: number;

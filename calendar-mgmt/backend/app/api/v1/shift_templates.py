@@ -61,6 +61,40 @@ async def list_shift_templates(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    token = _extract_token(request)
+
+    # Tự động đồng bộ workplace_id mẫu (00000000-0000-0000-0000-000000000001..3) trong Docker sang UUID thực tế bên HR Core
+    all_tpl_res = await db.execute(select(ShiftTemplate))
+    all_tpls = all_tpl_res.scalars().all()
+    placeholder_tpls = [t for t in all_tpls if str(t.workplace_id).startswith("00000000-0000-0000-0000-00000000000")]
+    if placeholder_tpls:
+        try:
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            wp_resp = await hr_client._request("GET", "/api/v1/workplaces", headers=headers, timeout=5)
+            if wp_resp.status_code == 200:
+                wps = wp_resp.json()
+                if wps:
+                    office_wps = [w for w in wps if w.get("is_office_hours")]
+                    non_office_wps = [w for w in wps if not w.get("is_office_hours")]
+                    wp1 = next((w["id"] for w in office_wps if w.get("code") == "TSC"), office_wps[0]["id"] if office_wps else wps[0]["id"])
+                    wp2 = non_office_wps[0]["id"] if non_office_wps else (office_wps[1]["id"] if len(office_wps) > 1 else wp1)
+                    wp3 = non_office_wps[1]["id"] if len(non_office_wps) > 1 else wp2
+                    mapping = {
+                        "00000000-0000-0000-0000-000000000001": UUID(str(wp1)),
+                        "00000000-0000-0000-0000-000000000002": UUID(str(wp2)),
+                        "00000000-0000-0000-0000-000000000003": UUID(str(wp3)),
+                    }
+                    changed = False
+                    for t in placeholder_tpls:
+                        new_wp_uuid = mapping.get(str(t.workplace_id))
+                        if new_wp_uuid:
+                            t.workplace_id = new_wp_uuid
+                            changed = True
+                    if changed:
+                        await db.commit()
+        except Exception:
+            pass
+
     query = select(ShiftTemplate)
     if active_only:
         query = query.where(ShiftTemplate.is_active == True)
@@ -71,7 +105,6 @@ async def list_shift_templates(
     result = await db.execute(query)
     templates = result.scalars().all()
 
-    token = _extract_token(request)
     wp_ids = list(set(str(t.workplace_id) for t in templates if t.workplace_id))
     all_dept_ids = [str(d) for t in templates for d in (t.department_ids or [])]
     dept_ids = list(set(all_dept_ids))

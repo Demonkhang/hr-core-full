@@ -27,6 +27,7 @@ export const ROUTES = {
   PERSONNEL_PROFILE_DETAIL: (userId: string) => `/personnel-profiles/${userId}`,
   PERSONNEL_ALERTS: '/personnel-alerts',
   MOBILE_ESS: '/mobile-ess',
+  USER_GUIDE: '/user-guide',
 };
 
 

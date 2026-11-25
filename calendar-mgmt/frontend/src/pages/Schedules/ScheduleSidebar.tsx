@@ -302,11 +302,8 @@ export function ScheduleSidebar({ selectedDateSidebar, employees, shiftTemplates
     try {
       const targetMondayStr = sidebarMonday.format(DATE_FORMATS.ISO_DATE);
       const deptId = selectedDept.length === 1 ? selectedDept[0] : undefined;
-      const res = await scheduleService.copyPreviousWeek({
-        target_monday: targetMondayStr,
-        department_id: deptId,
-      });
-      message.success(res.message || `Đã sao chép ${res.copied_count} ca trực`);
+      const res = await scheduleService.copyPreviousWeek(targetMondayStr, deptId);
+      message.success(res.message || `Đã sao chép ${res.created} ca trực`);
       await onRefresh?.();
     } catch (err: any) {
       message.error(err?.response?.data?.detail || 'Không thể sao chép lịch tuần trước');

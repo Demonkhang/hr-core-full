@@ -19,6 +19,7 @@ import {
   IdcardOutlined,
   BarChartOutlined,
   BellOutlined,
+  BookOutlined,
   SunOutlined,
   MoonOutlined,
 } from '@ant-design/icons';
@@ -26,6 +27,7 @@ import {
 
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { getAccessToken, getRefreshToken } from '@/store/tokenManager';
 import { useTheme } from '@/context/ThemeContext';
 import { ROUTES, COLORS, BORDER_RADIUS } from '@/utils/constants';
 import { ProfileModal } from '@/components/Common/ProfileModal';
@@ -104,6 +106,11 @@ function buildMenuItems(perms: any): any[] {
       ],
     });
   }
+  items.push({
+    key: ROUTES.USER_GUIDE,
+    icon: <BookOutlined />,
+    label: 'Hướng dẫn sử dụng',
+  });
   return items;
 }
 
@@ -121,6 +128,7 @@ const pageTitleMap: Record<string, string> = {
   [ROUTES.BASE_SALARY_CONFIG]: 'Cấu hình lương',
   [ROUTES.PERSONNEL_PROFILES]: 'Hồ sơ lý lịch viên chức (BNV)',
   [ROUTES.PERSONNEL_ALERTS]: 'Bàn làm việc Cán bộ - Cảnh báo Đến hạn',
+  [ROUTES.USER_GUIDE]: 'Tài liệu Hướng dẫn Sử dụng & Quy trình Nghiệp vụ',
 };
 
 
@@ -373,8 +381,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 onClick: ({ key }: any) => {
 
                   if (key === 'calendar') {
-                    const token = localStorage.getItem('access_token');
-                    window.location.href = `http://localhost:5174?token=${encodeURIComponent(token || '')}`;
+                    const token = getAccessToken() || localStorage.getItem('access_token') || '';
+                    const refreshToken = getRefreshToken() || '';
+                    const baseCalendarUrl =
+                      (import.meta as any).env?.VITE_CALENDAR_URL ||
+                      `${window.location.protocol}//${window.location.hostname}:5174`;
+                    window.location.href = `${baseCalendarUrl}?token=${encodeURIComponent(token)}&refresh_token=${encodeURIComponent(refreshToken)}`;
                   }
                 },
               }}

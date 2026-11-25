@@ -80,45 +80,11 @@ async def list_job_positions(
 
 @router.get("/import/template")
 async def download_job_positions_template(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "ViTriViecLam"
-    headers = [
-        "Mã vị trí việc làm",
-        "Tên vị trí việc làm",
-        "Bậc nghề nghiệp",
-        "Nơi làm việc",
-        "Bằng cấp (trình độ)",
-        "Chuyên môn",
-        "Số lượng tối đa (Định biên)",
-        "Mô tả",
-    ]
-    ws.append(headers)
-    ws.append(["CNTT", "Chuyên viên Công nghệ thông tin", 1, "Trụ sở chính", "Đại học", "Công nghệ thông tin", 2, "Quản trị hệ thống IT"])
-    ws.append(["KT", "Kế toán viên", 2, "Trụ sở chính", "Đại học", "Kế toán", 3, "Kế toán tổng hợp"])
-
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.font = header_font
-        cell.fill = header_fill
-
-    for col in ws.columns:
-        max_len = max(len(str(c.value or "")) for c in col) + 2
-        ws.column_dimensions[col[0].column_letter].width = max(max_len, 15)
-
-    buf = BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=mau_nhap_vitrivieclam.xlsx"},
-    )
+    # Sử dụng chung định dạng với file Xuất Excel để người dùng có thể dùng trực tiếp file Export làm file Import
+    return await export_job_positions_to_excel(active_only=False, db=db, current_user=current_user)
 
 
 @router.get("/export")
@@ -177,24 +143,36 @@ async def export_job_positions_to_excel(
         cell.alignment = header_alignment
         cell.border = thin_border
 
-    for row_idx, jp in enumerate(job_positions, 2):
-        row_data = [
-            jp.code,
-            jp.name,
-            f"Bậc {jp.professional_level}",
-            jp.workplace.name if jp.workplace else "",
-            jp.required_qualification_level or "",
-            jp.required_specialty or "",
-            jp.max_headcount,
-            headcounts.get(str(jp.id), 0),
-            "Hoạt động" if jp.is_active else "Ngừng hoạt động",
-            jp.description or "",
+    if job_positions:
+        for row_idx, jp in enumerate(job_positions, 2):
+            row_data = [
+                jp.code,
+                jp.name,
+                f"Bậc {jp.professional_level}",
+                jp.workplace.name if jp.workplace else "",
+                jp.required_qualification_level or "",
+                jp.required_specialty or "",
+                jp.max_headcount,
+                headcounts.get(str(jp.id), 0),
+                "Hoạt động" if jp.is_active else "Ngừng hoạt động",
+                jp.description or "",
+            ]
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = thin_border
+                if col_idx in (1, 3, 7, 8, 9):
+                    cell.alignment = Alignment(horizontal="center")
+    else:
+        sample_rows = [
+            ["CNTT", "Chuyên viên Công nghệ thông tin", "Bậc 1", "Trụ sở chính", "Đại học", "Công nghệ thông tin", 2, 0, "Hoạt động", "Quản trị hệ thống IT"],
+            ["KT", "Kế toán viên", "Bậc 2", "Trụ sở chính", "Đại học", "Kế toán", 3, 0, "Hoạt động", "Kế toán tổng hợp"],
         ]
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            cell.border = thin_border
-            if col_idx in (1, 3, 7, 8, 9):
-                cell.alignment = Alignment(horizontal="center")
+        for row_idx, row_data in enumerate(sample_rows, 2):
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = thin_border
+                if col_idx in (1, 3, 7, 8, 9):
+                    cell.alignment = Alignment(horizontal="center")
 
     for col in ws.columns:
         max_length = 0
@@ -218,29 +196,19 @@ async def export_job_positions_to_excel(
     )
 
 
-@router.post("/import", status_code=200)
-async def import_job_positions_from_excel(
-    request: Request,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    perms: dict = Depends(RequirePermission('can_manage_settings')),
-):
-    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
-        raise BadRequestError(detail="Chỉ hỗ trợ file định dạng Excel (.xlsx, .xls)")
+async def _parse_job_positions_excel(content: bytes, db: AsyncSession):
+    try:
+        wb = load_workbook(filename=BytesIO(content), data_only=True)
+    except Exception:
+        raise BadRequestError(detail="Không thể đọc file Excel. Vui lòng kiểm tra định dạng file (.xlsx)")
 
-    content = await file.read()
-    if not content:
-        raise BadRequestError(detail="File Excel rỗng")
-
-    wb = load_workbook(filename=BytesIO(content))
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         raise BadRequestError(detail="File Excel rỗng")
 
     headers = [str(c).strip() if c is not None else "" for c in rows[0]]
-    
+
     col_code = -1
     col_name = -1
     col_level = -1
@@ -248,6 +216,7 @@ async def import_job_positions_from_excel(
     col_qual = -1
     col_spec = -1
     col_max = -1
+    col_status = -1
     col_desc = -1
 
     for idx, h in enumerate(headers):
@@ -264,89 +233,280 @@ async def import_job_positions_from_excel(
             col_qual = idx
         elif "chuyên môn" in h_lower:
             col_spec = idx
+        elif "hiện tại" in h_lower:
+            # Cột "Số lượng hiện tại" trong file Export chỉ để tham khảo, không ghi đè vào cột Định biên tối đa
+            continue
         elif "tối đa" in h_lower or "định biên" in h_lower or "số lượng" in h_lower:
             col_max = idx
+        elif "trạng thái" in h_lower:
+            col_status = idx
         elif "mô tả" in h_lower:
             col_desc = idx
 
     if col_code == -1 or col_name == -1:
-        raise BadRequestError(detail="File Excel phải chứa ít nhất 2 cột: 'Mã vị trí việc làm' và 'Tên vị trí việc làm'")
+        raise BadRequestError(
+            detail="File Excel phải chứa ít nhất 2 cột: 'Mã vị trí việc làm' và 'Tên vị trí việc làm' (có thể dùng trực tiếp file Xuất Excel)"
+        )
 
-    wp_cache: Dict[str, UUID] = {}
+    wp_cache: Dict[str, Workplace] = {}
     wps_res = await db.execute(select(Workplace).where(Workplace.is_active == True))
     for w in wps_res.scalars().all():
-        wp_cache[w.name.lower().strip()] = w.id
+        wp_cache[w.name.lower().strip()] = w
         if w.code:
-            wp_cache[w.code.lower().strip()] = w.id
+            wp_cache[w.code.lower().strip()] = w
 
-    created_count = 0
-    updated_count = 0
-    errors = []
+    existing_res = await db.execute(select(JobPosition))
+    existing_jps = existing_res.scalars().all()
+    existing_by_code: Dict[str, JobPosition] = {jp.code.strip().lower(): jp for jp in existing_jps if jp.code}
+    existing_by_name: Dict[str, JobPosition] = {jp.name.strip().lower(): jp for jp in existing_jps if jp.name}
+
+    seen_codes_in_file: Dict[str, int] = {}
+    seen_names_in_file: Dict[str, int] = {}
+
+    parsed_rows = []
+    warnings: List[str] = []
+    errors: List[str] = []
 
     for row_idx, row in enumerate(rows[1:], start=2):
         if all(c is None or str(c).strip() == "" for c in row):
             continue
 
-        code_val = str(row[col_code]).strip() if col_code < len(row) and row[col_code] else ""
-        name_val = str(row[col_name]).strip() if col_name < len(row) and row[col_name] else ""
+        code_val = str(row[col_code]).strip() if col_code < len(row) and row[col_code] is not None else ""
+        name_val = str(row[col_name]).strip() if col_name < len(row) and row[col_name] is not None else ""
 
         if not code_val or not name_val:
-            errors.append(f"Dòng {row_idx}: Mã và Tên vị trí việc làm không được để trống")
+            err_msg = f"Dòng {row_idx}: Mã và Tên vị trí việc làm không được để trống"
+            errors.append(err_msg)
+            parsed_rows.append({
+                "row": row_idx,
+                "code": code_val,
+                "name": name_val,
+                "professional_level": 1,
+                "workplace_id": None,
+                "workplace_name": "",
+                "required_qualification_level": None,
+                "required_specialty": None,
+                "max_headcount": 1,
+                "is_active": True,
+                "description": None,
+                "status": "error",
+                "is_duplicate": False,
+                "duplicate_type": None,
+                "message": err_msg,
+                "existing_jp": None,
+            })
             continue
 
         prof_level = 1
         if col_level != -1 and col_level < len(row) and row[col_level] is not None:
             raw_lvl = str(row[col_level]).strip().lower().replace("bậc", "").strip()
             try:
-                prof_level = int(raw_lvl)
+                prof_level = int(float(raw_lvl))
                 prof_level = max(1, min(5, prof_level))
             except ValueError:
                 prof_level = 1
 
-        wp_val = str(row[col_wp]).strip() if col_wp != -1 and col_wp < len(row) and row[col_wp] else None
-        wp_id = wp_cache.get(wp_val.lower()) if wp_val else None
+        wp_val = str(row[col_wp]).strip() if col_wp != -1 and col_wp < len(row) and row[col_wp] is not None else ""
+        if wp_val in ("-", "None", "null"):
+            wp_val = ""
+        wp_obj = wp_cache.get(wp_val.lower()) if wp_val else None
 
-        qual_val = str(row[col_qual]).strip() if col_qual != -1 and col_qual < len(row) and row[col_qual] else None
-        spec_val = str(row[col_spec]).strip() if col_spec != -1 and col_spec < len(row) and row[col_spec] else None
-        
+        qual_val = str(row[col_qual]).strip() if col_qual != -1 and col_qual < len(row) and row[col_qual] is not None else None
+        if qual_val in ("", "-", "None", "null"):
+            qual_val = None
+
+        spec_val = str(row[col_spec]).strip() if col_spec != -1 and col_spec < len(row) and row[col_spec] is not None else None
+        if spec_val in ("", "-", "None", "null"):
+            spec_val = None
+
         max_hc = 1
         if col_max != -1 and col_max < len(row) and row[col_max] is not None:
             try:
-                max_hc = int(row[col_max])
+                max_hc = int(float(str(row[col_max]).strip()))
                 max_hc = max(0, max_hc)
             except ValueError:
                 max_hc = 1
 
-        desc_val = str(row[col_desc]).strip() if col_desc != -1 and col_desc < len(row) and row[col_desc] else None
+        is_active = True
+        if col_status != -1 and col_status < len(row) and row[col_status] is not None:
+            status_str = str(row[col_status]).strip().lower()
+            if "ngừng" in status_str or "khoá" in status_str or "khóa" in status_str or status_str in ("false", "0", "inactive"):
+                is_active = False
 
-        existing_res = await db.execute(select(JobPosition).where(JobPosition.code == code_val))
-        existing_jp = existing_res.scalar_one_or_none()
+        desc_val = str(row[col_desc]).strip() if col_desc != -1 and col_desc < len(row) and row[col_desc] is not None else None
+        if desc_val in ("", "-", "None", "null"):
+            desc_val = None
+
+        code_lower = code_val.lower()
+        name_lower = name_val.lower()
+
+        dup_reasons: List[str] = []
+        dup_type: Optional[str] = None
+
+        # 1. Kiểm tra trùng lặp ngay trong file Excel
+        if code_lower in seen_codes_in_file:
+            dup_reasons.append(f"Trùng mã '{code_val}' với dòng {seen_codes_in_file[code_lower]} ngay trong file Excel")
+            dup_type = "in_file"
+        elif name_lower in seen_names_in_file:
+            dup_reasons.append(f"Trùng tên '{name_val}' với dòng {seen_names_in_file[name_lower]} ngay trong file Excel")
+            dup_type = "in_file"
+        else:
+            seen_codes_in_file[code_lower] = row_idx
+            seen_names_in_file[name_lower] = row_idx
+
+        # 2. Kiểm tra trùng lặp với dữ liệu hiện có trong hệ thống (DB)
+        existing_jp_by_code = existing_by_code.get(code_lower)
+        existing_jp_by_name = existing_by_name.get(name_lower)
+        existing_jp = existing_jp_by_code or existing_jp_by_name
 
         if existing_jp:
-            existing_jp.name = name_val
-            existing_jp.professional_level = prof_level
-            if wp_id is not None:
-                existing_jp.workplace_id = wp_id
-            if qual_val is not None:
-                existing_jp.required_qualification_level = qual_val
-            if spec_val is not None:
-                existing_jp.required_specialty = spec_val
-            existing_jp.max_headcount = max_hc
-            if desc_val is not None:
-                existing_jp.description = desc_val
-            existing_jp.is_active = True
-            updated_count += 1
+            if not dup_type:
+                dup_type = "in_db"
+            if existing_jp_by_code and existing_jp_by_name and existing_jp_by_code.id == existing_jp_by_name.id:
+                dup_reasons.append(f"Vị trí '[{existing_jp.code}] {existing_jp.name}' đã tồn tại trên hệ thống")
+            elif existing_jp_by_code:
+                dup_reasons.append(f"Trùng mã vị trí '{existing_jp_by_code.code}' đã tồn tại trên hệ thống ({existing_jp_by_code.name})")
+            elif existing_jp_by_name:
+                dup_reasons.append(f"Trùng tên vị trí '{existing_jp_by_name.name}' đã tồn tại trên hệ thống (Mã: {existing_jp_by_name.code})")
+
+        is_duplicate = len(dup_reasons) > 0
+        msg = "; ".join(dup_reasons) if is_duplicate else "Hợp lệ (Vị trí mới)"
+        if is_duplicate:
+            warnings.append(f"Dòng {row_idx} [{code_val} - {name_val}]: {msg}")
+
+        parsed_rows.append({
+            "row": row_idx,
+            "code": code_val,
+            "name": name_val,
+            "professional_level": prof_level,
+            "workplace_id": wp_obj.id if wp_obj else None,
+            "workplace_name": wp_obj.name if wp_obj else wp_val,
+            "required_qualification_level": qual_val,
+            "required_specialty": spec_val,
+            "max_headcount": max_hc,
+            "is_active": is_active,
+            "description": desc_val,
+            "status": "duplicate" if is_duplicate else "valid",
+            "is_duplicate": is_duplicate,
+            "duplicate_type": dup_type,
+            "message": msg,
+            "existing_jp": existing_jp,
+        })
+
+    return parsed_rows, warnings, errors
+
+
+@router.post("/import/preview", status_code=200)
+async def preview_import_job_positions_from_excel(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    perms: dict = Depends(RequirePermission('can_manage_settings')),
+):
+    if not file.filename or not file.filename.lower().endswith(('.xlsx', '.xls')):
+        raise BadRequestError(detail="Chỉ hỗ trợ file định dạng Excel (.xlsx, .xls)")
+
+    content = await file.read()
+    if not content:
+        raise BadRequestError(detail="File Excel rỗng")
+
+    parsed_rows, warnings, errors = await _parse_job_positions_excel(content, db)
+
+    valid_new_count = sum(1 for r in parsed_rows if r["status"] == "valid")
+    duplicate_count = sum(1 for r in parsed_rows if r["status"] == "duplicate")
+    error_count = sum(1 for r in parsed_rows if r["status"] == "error")
+
+    preview_rows = [
+        {
+            "row": r["row"],
+            "code": r["code"],
+            "name": r["name"],
+            "professional_level": r["professional_level"],
+            "workplace_name": r["workplace_name"],
+            "required_qualification_level": r["required_qualification_level"] or "",
+            "required_specialty": r["required_specialty"] or "",
+            "max_headcount": r["max_headcount"],
+            "is_active": r["is_active"],
+            "description": r["description"] or "",
+            "status": r["status"],
+            "is_duplicate": r["is_duplicate"],
+            "duplicate_type": r["duplicate_type"],
+            "message": r["message"],
+        }
+        for r in parsed_rows
+    ]
+
+    return {
+        "total_rows": len(parsed_rows),
+        "valid_new_count": valid_new_count,
+        "duplicate_count": duplicate_count,
+        "error_count": error_count,
+        "warnings": warnings,
+        "errors": errors,
+        "rows": preview_rows,
+    }
+
+
+@router.post("/import", status_code=200)
+async def import_job_positions_from_excel(
+    request: Request,
+    file: UploadFile = File(...),
+    duplicate_action: str = Query("skip", description="Cách xử lý khi trùng: 'skip' (bỏ qua dòng trùng) hoặc 'overwrite' (cập nhật đè)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    perms: dict = Depends(RequirePermission('can_manage_settings')),
+):
+    if not file.filename or not file.filename.lower().endswith(('.xlsx', '.xls')):
+        raise BadRequestError(detail="Chỉ hỗ trợ file định dạng Excel (.xlsx, .xls)")
+
+    content = await file.read()
+    if not content:
+        raise BadRequestError(detail="File Excel rỗng")
+
+    parsed_rows, warnings, errors = await _parse_job_positions_excel(content, db)
+
+    created_count = 0
+    updated_count = 0
+    skipped_count = 0
+
+    for item in parsed_rows:
+        if item["status"] == "error":
+            continue
+
+        # Nếu trùng ngay trong file Excel thì luôn bỏ qua dòng bị lặp lại
+        if item["duplicate_type"] == "in_file":
+            skipped_count += 1
+            continue
+
+        existing_jp: Optional[JobPosition] = item["existing_jp"]
+        if existing_jp:
+            if duplicate_action == "overwrite":
+                existing_jp.name = item["name"]
+                existing_jp.professional_level = item["professional_level"]
+                if item["workplace_id"] is not None:
+                    existing_jp.workplace_id = item["workplace_id"]
+                if item["required_qualification_level"] is not None:
+                    existing_jp.required_qualification_level = item["required_qualification_level"]
+                if item["required_specialty"] is not None:
+                    existing_jp.required_specialty = item["required_specialty"]
+                existing_jp.max_headcount = item["max_headcount"]
+                if item["description"] is not None:
+                    existing_jp.description = item["description"]
+                existing_jp.is_active = item["is_active"]
+                updated_count += 1
+            else:
+                skipped_count += 1
         else:
             new_jp = JobPosition(
-                code=code_val,
-                name=name_val,
-                professional_level=prof_level,
-                workplace_id=wp_id,
-                required_qualification_level=qual_val,
-                required_specialty=spec_val,
-                max_headcount=max_hc,
-                description=desc_val,
-                is_active=True,
+                code=item["code"],
+                name=item["name"],
+                professional_level=item["professional_level"],
+                workplace_id=item["workplace_id"],
+                required_qualification_level=item["required_qualification_level"],
+                required_specialty=item["required_specialty"],
+                max_headcount=item["max_headcount"],
+                description=item["description"],
+                is_active=item["is_active"],
             )
             db.add(new_jp)
             created_count += 1
@@ -356,7 +516,13 @@ async def import_job_positions_from_excel(
     await create_audit_log(
         db, action="job_position.import", resource_type="job_position",
         user_id=str(current_user.id),
-        new_values={"created": created_count, "updated": updated_count, "errors": len(errors)},
+        new_values={
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "warnings": len(warnings),
+            "errors": len(errors),
+        },
         request=request, success=True,
     )
 
@@ -364,6 +530,9 @@ async def import_job_positions_from_excel(
         "imported_count": created_count + updated_count,
         "created_count": created_count,
         "updated_count": updated_count,
+        "skipped_count": skipped_count,
+        "duplicate_count": len(warnings),
+        "warnings": warnings,
         "errors": errors,
     }
 
@@ -467,7 +636,10 @@ async def update_job_position(
         else:
             update_data["workplace_id"] = None
 
-    old_values = {k: getattr(jp, k, None) for k in update_data.keys()}
+    old_values = {
+        k: (str(getattr(jp, k, None)) if isinstance(getattr(jp, k, None), UUID) else getattr(jp, k, None))
+        for k in update_data.keys()
+    }
     for key, value in update_data.items():
         setattr(jp, key, value)
 

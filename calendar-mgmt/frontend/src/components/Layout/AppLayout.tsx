@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { getAccessToken, getRefreshToken } from '@/store/tokenManager';
 import { ROUTES, COLORS, BORDER_RADIUS } from '@/utils/constants';
 import { ProfileModal } from '@/components/Common/ProfileModal';
 import { NotificationBell } from '@/components/Common/NotificationBell';
@@ -442,8 +443,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 onClick: ({ key }: any) => {
 
                   if (key === 'hr') {
-                    const token = localStorage.getItem('access_token');
-                    window.location.href = `http://localhost:5173?token=${encodeURIComponent(token || '')}`;
+                    const token = getAccessToken() || localStorage.getItem('access_token') || '';
+                    const refreshToken = getRefreshToken() || '';
+                    const baseHrUrl =
+                      (import.meta as any).env?.VITE_HR_URL ||
+                      `${window.location.protocol}//${window.location.hostname}:5173`;
+                    window.location.href = `${baseHrUrl}?token=${encodeURIComponent(token)}&refresh_token=${encodeURIComponent(refreshToken)}`;
                   }
                 },
               }}

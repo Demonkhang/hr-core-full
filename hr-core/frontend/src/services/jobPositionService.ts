@@ -43,7 +43,7 @@ export const jobPositionService = {
     return res.data;
   },
 
-  /** GET /job-positions/import/template – tải file mẫu */
+  /** GET /job-positions/import/template – tải file mẫu (cùng định dạng file Xuất Excel) */
   async downloadTemplate(): Promise<Blob> {
     const res = await apiClient.get(API_ENDPOINTS.JOB_POSITIONS_IMPORT_TEMPLATE, {
       responseType: 'blob',
@@ -51,11 +51,56 @@ export const jobPositionService = {
     return res.data;
   },
 
+  /** POST /job-positions/import/preview – xem trước & kiểm tra trùng lặp file Excel */
+  async previewImport(file: File): Promise<{
+    total_rows: number;
+    valid_new_count: number;
+    duplicate_count: number;
+    error_count: number;
+    warnings: string[];
+    errors: string[];
+    rows: Array<{
+      row: number;
+      code: string;
+      name: string;
+      professional_level: number;
+      workplace_name: string;
+      required_qualification_level: string;
+      required_specialty: string;
+      max_headcount: number;
+      is_active: boolean;
+      description: string;
+      status: 'valid' | 'duplicate' | 'error';
+      is_duplicate: boolean;
+      duplicate_type: 'in_db' | 'in_file' | null;
+      message: string;
+    }>;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post(API_ENDPOINTS.JOB_POSITIONS_IMPORT_PREVIEW, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+  },
+
   /** POST /job-positions/import – nhập file Excel */
-  async import(file: File): Promise<{ imported_count: number; created_count: number; updated_count: number; errors: string[] }> {
+  async import(
+    file: File,
+    duplicateAction: 'skip' | 'overwrite' = 'skip'
+  ): Promise<{
+    imported_count: number;
+    created_count: number;
+    updated_count: number;
+    skipped_count: number;
+    duplicate_count: number;
+    warnings: string[];
+    errors: string[];
+  }> {
     const formData = new FormData();
     formData.append('file', file);
     const res = await apiClient.post(API_ENDPOINTS.JOB_POSITIONS_IMPORT, formData, {
+      params: { duplicate_action: duplicateAction },
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return res.data;

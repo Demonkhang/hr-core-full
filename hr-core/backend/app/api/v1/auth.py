@@ -106,18 +106,21 @@ async def get_me(
     pos: Position | None = None
 
     emp_id = current_user.employee_id
-    if not emp_id:
-        res_prof = await db.execute(
-            select(VcProfile.employee_id).where(VcProfile.user_id == current_user.id)
-        )
-        emp_id = res_prof.scalar_one_or_none()
+    try:
+        if not emp_id:
+            res_prof = await db.execute(
+                select(VcProfile.employee_id).where(VcProfile.user_id == current_user.id)
+            )
+            emp_id = res_prof.scalar_one_or_none()
 
-    if emp_id:
-        res_emp = await db.execute(select(Employee).where(Employee.id == emp_id))
-        emp = res_emp.scalar_one_or_none()
-        if emp and emp.position_id:
-            res_pos = await db.execute(select(Position).where(Position.id == emp.position_id))
-            pos = res_pos.scalar_one_or_none()
+        if emp_id:
+            res_emp = await db.execute(select(Employee).where(Employee.id == emp_id))
+            emp = res_emp.scalar_one_or_none()
+            if emp and emp.position_id:
+                res_pos = await db.execute(select(Position).where(Position.id == emp.position_id))
+                pos = res_pos.scalar_one_or_none()
+    except Exception as e:
+        logger.warning("Could not resolve position in get_me: %s", e)
 
     if pos:
         pos_name = pos.name

@@ -12,9 +12,30 @@ logger = logging.getLogger(__name__)
 class HRClient:
     def __init__(self, base_url: str, timeout: int = 10):
         self.base_url = base_url.rstrip("/")
+        self._fallback_urls = [
+            self.base_url,
+            "http://127.0.0.1:8001",
+            "http://hr-backend:8000",
+            "http://host.docker.internal:8001",
+        ]
         self._client = httpx.AsyncClient(timeout=timeout)
         self._cache: dict = {}
         self._cache_ttl: int = 300  # 5 minutes
+
+    async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        candidates = [self.base_url] + [u for u in self._fallback_urls if u != self.base_url]
+        last_exc: Exception | None = None
+        for base in candidates:
+            try:
+                resp = await self._client.request(method, f"{base}{path}", **kwargs)
+                if base != self.base_url:
+                    logger.info(f"HRClient switched active base_url to {base}")
+                    self.base_url = base
+                return resp
+            except httpx.RequestError as exc:
+                last_exc = exc
+                continue
+        raise last_exc or httpx.ConnectError("All HR Core candidate URLs unreachable")
 
     def _cache_get(self, key: str) -> Optional[dict]:
         entry = self._cache.get(key)
@@ -45,8 +66,9 @@ class HRClient:
         try:
             if token:
                 headers = {"Authorization": f"Bearer {token}"}
-                resp = await self._client.get(
-                    f"{self.base_url}/api/v1/employees/{employee_id}",
+                resp = await self._request(
+                    "GET",
+                    f"/api/v1/employees/{employee_id}",
                     headers=headers,
                     timeout=5,
                 )
@@ -66,8 +88,9 @@ class HRClient:
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
             params = {"active_only": "true" if active_only else "false"}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/employees",
+            resp = await self._request(
+                "GET",
+                "/api/v1/employees",
                 headers=headers,
                 params=params,
                 timeout=10,
@@ -92,8 +115,9 @@ class HRClient:
         if uncached:
             try:
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
-                resp = await self._client.post(
-                    f"{self.base_url}/api/v1/employees/batch",
+                resp = await self._request(
+                    "POST",
+                    "/api/v1/employees/batch",
                     json={"ids": uncached},
                     headers=headers,
                     timeout=10,
@@ -116,8 +140,9 @@ class HRClient:
             return cached
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/departments/{department_id}",
+            resp = await self._request(
+                "GET",
+                f"/api/v1/departments/{department_id}",
                 headers=headers,
                 timeout=5,
             )
@@ -137,8 +162,9 @@ class HRClient:
             return cached
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/workplaces/{workplace_id}",
+            resp = await self._request(
+                "GET",
+                f"/api/v1/workplaces/{workplace_id}",
                 headers=headers,
                 timeout=5,
             )
@@ -171,8 +197,9 @@ class HRClient:
     async def list_positions(self, token: str = "") -> list[dict]:
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/positions",
+            resp = await self._request(
+                "GET",
+                "/api/v1/positions",
                 headers=headers,
                 timeout=10,
             )
@@ -187,8 +214,9 @@ class HRClient:
     async def update_position(self, pos_id: str, data: dict, token: str = "") -> Optional[dict]:
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.put(
-                f"{self.base_url}/api/v1/positions/{pos_id}",
+            resp = await self._request(
+                "PUT",
+                f"/api/v1/positions/{pos_id}",
                 json=data,
                 headers=headers,
                 timeout=10,
@@ -207,8 +235,9 @@ class HRClient:
         if cached:
             return cached
         try:
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/auth/me",
+            resp = await self._request(
+                "GET",
+                "/api/v1/auth/me",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5,
             )
@@ -229,8 +258,9 @@ class HRClient:
             return cached
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/salary-config/public-sector-active",
+            resp = await self._request(
+                "GET",
+                "/api/v1/salary-config/public-sector-active",
                 headers=headers,
                 timeout=5,
             )
@@ -247,8 +277,9 @@ class HRClient:
     async def list_shift_rate_configs(self, token: str = "") -> list[dict]:
         try:
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            resp = await self._client.get(
-                f"{self.base_url}/api/v1/shift-rate-configs",
+            resp = await self._request(
+                "GET",
+                "/api/v1/shift-rate-configs",
                 headers=headers,
                 timeout=5,
             )

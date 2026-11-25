@@ -41,18 +41,17 @@ async def proxy_list_departments(
 ):
     token = current_user.get("_token", "")
     try:
-        from httpx import AsyncClient
-        async with AsyncClient(timeout=10) as client:
-            from app.config import settings
-            params = {"active_only": "true" if active_only else "false"}
-            resp = await client.get(
-                f"{settings.HR_CORE_BASE_URL}/api/v1/departments",
-                headers={"Authorization": f"Bearer {token}"},
-                params=params,
-            )
-            if resp.status_code == 200:
-                return resp.json()
-            return []
+        params = {"active_only": "true" if active_only else "false"}
+        resp = await hr_client._request(
+            "GET",
+            "/api/v1/departments",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return []
     except Exception:
         return []
 

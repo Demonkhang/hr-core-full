@@ -537,7 +537,7 @@ export function LeaveStatistics() {
               placeholder="Tìm tên hoặc mã nhân viên..."
               prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e: any) => setSearchText(e.target.value)}
               style={{ width: 230 }}
             />
           )}
@@ -560,8 +560,8 @@ export function LeaveStatistics() {
         </Space>
       </div>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <div>
           <Card size="small">
             <Statistic
               title="Nhân sự thống kê"
@@ -570,8 +570,8 @@ export function LeaveStatistics() {
               prefix={<TeamOutlined style={{ color: '#6366f1' }} />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title="Phép năm đã nghỉ / Tổng cấp"
@@ -581,8 +581,8 @@ export function LeaveStatistics() {
               prefix={<CalendarOutlined />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title="Tổng phép năm còn lại"
@@ -592,8 +592,8 @@ export function LeaveStatistics() {
               prefix={<CheckCircleOutlined />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title="Tổng ngày nghỉ (Tất cả loại)"
@@ -603,8 +603,8 @@ export function LeaveStatistics() {
               prefix={<ClockCircleOutlined />}
             />
           </Card>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <Table
         dataSource={filteredBalances}

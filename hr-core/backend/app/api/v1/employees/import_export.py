@@ -50,8 +50,45 @@ async def download_import_template(
     )
 
 
+@router.post("/import/preview", status_code=200)
+async def preview_import_employees_from_excel(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise BadRequestError(detail=RESPONSE_MESSAGES["ONLY_EXCEL_SUPPORTED"])
+    content = await file.read()
+    if not content:
+        raise BadRequestError(detail=RESPONSE_MESSAGES["EMPTY_FILE"])
+    try:
+        records, parse_errors = parse_excel(content)
+    except ValueError as e:
+        raise BadRequestError(detail=str(e))
+
+    preview_rows = [
+        {
+            "row": r.get("_row"),
+            "employee_code": r.get("employee_code") or "",
+            "full_name": r.get("full_name") or "",
+            "department_code": r.get("department_code") or "",
+            "position": r.get("position") or "",
+            "cccd_number": r.get("cccd_number") or "",
+            "phone": r.get("phone") or "",
+            "email": r.get("email") or "",
+            "workplace_code": r.get("workplace_code") or "",
+            "hire_date": str(r.get("hire_date") or ""),
+        }
+        for r in records
+    ]
+    return {
+        "total_rows": len(preview_rows),
+        "records": preview_rows,
+        "errors": parse_errors,
+    }
+
+
 @router.post("/import", status_code=200)
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def import_employees_from_excel(
     request: Request,
     file: UploadFile = File(...),

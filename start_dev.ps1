@@ -15,9 +15,9 @@ foreach ($port in $ports) {
 
 $rootDir = $PSScriptRoot
 
-Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\hr-core\backend`" && python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload" -WindowStyle Normal
+Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\hr-core\backend`" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -WindowStyle Normal
 Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\hr-core\frontend`" && npm run dev -- --port 5173" -WindowStyle Normal
-Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\calendar-mgmt\backend`" && python -m uvicorn app.main:app --host 127.0.0.1 --port 8002 --reload" -WindowStyle Normal
+Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\calendar-mgmt\backend`" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload" -WindowStyle Normal
 Start-Process cmd -ArgumentList "/k cd /d `"$rootDir\calendar-mgmt\frontend`" && npm run dev -- --port 5174" -WindowStyle Normal
 
 Write-Host "`n========================================================" -ForegroundColor Cyan

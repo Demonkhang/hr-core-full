@@ -150,8 +150,8 @@ export function OvertimeRegistrationList() {
       const foundStat = stats.find((s) => s.employee_id === employee_id);
       if (foundStat) {
         setEmpOtStat({
-          month_total: foundStat.month_total_hours,
-          year_total: foundStat.year_total_hours,
+          month_total: foundStat.month_total_hours ?? (foundStat.month_approved_hours + foundStat.month_pending_hours),
+          year_total: foundStat.year_total_hours ?? (foundStat.year_approved_hours + foundStat.year_pending_hours),
           month: targetMonth,
           year: targetYear,
         });

@@ -1,8 +1,30 @@
 import logging
 import re
+import socket
+from urllib.parse import urlparse
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import log as sa_log
 from app.config import settings
+
+
+def _resolve_reachable_db_url(raw_url: str, fallback_ports: list[int]) -> str:
+    try:
+        parsed = urlparse(raw_url)
+        host = parsed.hostname
+        port = parsed.port or 5432
+        if host in ("localhost", "127.0.0.1"):
+            candidates = [port] + [p for p in fallback_ports if p != port]
+            for cand_port in candidates:
+                try:
+                    with socket.create_connection(("127.0.0.1", cand_port), timeout=0.3):
+                        if cand_port != port:
+                            return re.sub(rf"@{re.escape(host)}:{port}/", f"@{host}:{cand_port}/", raw_url)
+                        return raw_url
+                except OSError:
+                    continue
+    except Exception:
+        pass
+    return raw_url
 
 
 class _ParamMaskingSQLLogger(logging.LoggerAdapter):
@@ -35,7 +57,7 @@ def _configure_sql_logger() -> None:
 
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _resolve_reachable_db_url(settings.DATABASE_URL, [5432, 5433]),
     echo=False,
     echo_pool=False,
 )

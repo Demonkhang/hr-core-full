@@ -2,6 +2,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
+
+const isInsideDocker = fs.existsSync('/.dockerenv');
+const hrProxyTarget = isInsideDocker
+  ? process.env.VITE_HR_API_PROXY || 'http://hr-backend:8000'
+  : 'http://127.0.0.1:8001';
+const calendarProxyTarget = isInsideDocker
+  ? process.env.VITE_API_PROXY || 'http://calendar-backend:8000'
+  : 'http://127.0.0.1:8002';
 
 export default defineConfig({
   plugins: [react()],
@@ -20,12 +29,12 @@ export default defineConfig({
     },
     proxy: {
       '/api/hr': {
-        target: process.env.VITE_HR_API_PROXY || 'http://localhost:8001',
+        target: hrProxyTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/hr/, '/api/v1'),
       },
       '/api': {
-        target: process.env.VITE_API_PROXY || 'http://localhost:8002',
+        target: calendarProxyTarget,
         changeOrigin: true,
       },
     },

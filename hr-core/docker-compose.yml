@@ -23,7 +23,7 @@ services:
     container_name: hr-backend
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@hr-db:5432/mbs_hr
-      SECRET_KEY: dev-secret-key-at-least-32-characters-long!!
+      SECRET_KEY: mbs-shared-secret-key-change-in-production-32chars!!
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"
       REFRESH_TOKEN_EXPIRE_DAYS: "7"
       JWT_ISSUER: mbs-hr

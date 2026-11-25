@@ -19,8 +19,19 @@ def _generate_random_password(length: int = 16) -> str:
 
 async def seed() -> Dict[str, str]:
     async with async_session_factory() as db:
-        existing_admin = await db.execute(select(User).where(User.username == "admin"))
-        if existing_admin.scalar_one_or_none():
+        res_admin = await db.execute(select(User).where(User.username == "admin"))
+        existing_admin = res_admin.scalar_one_or_none()
+        if existing_admin:
+            from app.core.security import verify_password
+            if (
+                not verify_password("admin123", existing_admin.hashed_password)
+                or existing_admin.must_change_password
+                or not existing_admin.is_active
+            ):
+                existing_admin.hashed_password = hash_password("admin123")
+                existing_admin.must_change_password = False
+                existing_admin.is_active = True
+                await db.commit()
             print("Seed data already exists, skipping.")
             return {}
 

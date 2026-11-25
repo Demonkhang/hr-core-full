@@ -1,11 +1,29 @@
 import logging
 import uuid
-from typing import Optional
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Optional
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit_log import AuditLog
 
 logger = logging.getLogger(__name__)
+
+
+def _make_json_serializable(obj: Any) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
+    if isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {str(k): _make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_make_json_serializable(v) for v in obj]
+    return obj
 
 
 def get_client_ip(request: Optional[Request]) -> Optional[str]:
@@ -54,8 +72,8 @@ async def create_audit_log(
         action=action,
         resource_type=resource_type,
         resource_id=rid,
-        old_values=old_values,
-        new_values=new_values,
+        old_values=_make_json_serializable(old_values),
+        new_values=_make_json_serializable(new_values),
         ip_address=ip_address,
         user_agent=user_agent,
         success=success,

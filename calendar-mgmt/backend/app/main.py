@@ -9,7 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import engine
-from app.models.base import Base
+from app.models import Base
 from app.api.v1.router import api_router
 from app.core.middleware import SecurityHeadersMiddleware
 from app.core.exceptions import NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError, ConflictError, ValidationError
@@ -19,21 +19,68 @@ logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL))
 logger = logging.getLogger(__name__)
 
 
+async def _ensure_calendar_db_exists() -> None:
+    """Tự động kiểm tra và khởi tạo database mbs_calendar nếu chạy PostgreSQL local chưa có DB này"""
+    import asyncpg
+    from urllib.parse import urlparse
+
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        return
+    except Exception as exc:
+        err_msg = str(exc).lower()
+        if "does not exist" not in err_msg and "invalidcatalogname" not in err_msg:
+            logger.warning(f"DB initial check warning: {exc}")
+            return
+
+    try:
+        parsed = urlparse(settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
+        db_name = (parsed.path or "/mbs_calendar").lstrip("/") or "mbs_calendar"
+        admin_conn = await asyncpg.connect(
+            host=parsed.hostname or "127.0.0.1",
+            port=parsed.port or 5432,
+            user=parsed.username or "postgres",
+            password=parsed.password or "postgres",
+            database="postgres",
+        )
+        try:
+            exists = await admin_conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
+            if not exists:
+                await admin_conn.execute(f'CREATE DATABASE "{db_name}"')
+                logger.info(f"Auto-created PostgreSQL database: {db_name}")
+        finally:
+            await admin_conn.close()
+    except Exception as create_exc:
+        logger.warning(f"Could not auto-create database: {create_exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION}")
+    await _ensure_calendar_db_exists()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(text("ALTER TABLE meeting_schedules DROP COLUMN IF EXISTS end_time"))
+
+    for sql_stmt in [
+        "ALTER TABLE meeting_schedules DROP COLUMN IF EXISTS end_time",
+        "ALTER TABLE schedules DROP CONSTRAINT IF EXISTS uq_employee_date",
+    ]:
         try:
-            await conn.execute(text("ALTER TABLE schedules DROP CONSTRAINT IF EXISTS uq_employee_date"))
+            async with engine.begin() as conn:
+                await conn.execute(text(sql_stmt))
         except Exception:
             pass
-        try:
+
+    try:
+        async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE schedules DROP CONSTRAINT IF EXISTS uq_employee_date_shift"))
-            await conn.execute(text("ALTER TABLE schedules ADD CONSTRAINT uq_employee_date_shift UNIQUE (employee_id, date, shift_template_id)"))
-        except Exception:
-            pass
+            await conn.execute(
+                text("ALTER TABLE schedules ADD CONSTRAINT uq_employee_date_shift UNIQUE (employee_id, date, shift_template_id)")
+            )
+    except Exception:
+        pass
     
     try:
         from app.seed import seed

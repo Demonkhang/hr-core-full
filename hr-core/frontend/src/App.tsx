@@ -22,21 +22,34 @@ import { PersonnelProfileList } from '@/pages/PersonnelProfiles/PersonnelProfile
 import { PersonnelProfileDetail } from '@/pages/PersonnelProfiles/PersonnelProfileDetail';
 import { PersonnelAlertWorkbench } from '@/pages/PersonnelAlerts/PersonnelAlertWorkbench';
 import { SpecialistMobilePortal } from '@/pages/MobileEss/SpecialistMobilePortal';
+import { SystemUserGuidePage } from '@/pages/UserGuide/SystemUserGuidePage';
 
 
 
 import { ROUTES } from '@/utils/constants';
+import { setAccessToken, setRefreshToken } from '@/store/tokenManager';
+
+function consumeSsoTokensFromUrl() {
+  if (typeof window === 'undefined') return;
+  const urlParams = new URLSearchParams(window.location.search);
+  const ssoToken = urlParams.get('token');
+  const ssoRefresh = urlParams.get('refresh_token');
+  if (ssoToken) {
+    setAccessToken(ssoToken);
+    if (ssoRefresh) {
+      setRefreshToken(ssoRefresh);
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+consumeSsoTokensFromUrl();
 
 function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const ssoToken = urlParams.get('token');
-    if (ssoToken) {
-      localStorage.setItem('access_token', ssoToken);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    consumeSsoTokensFromUrl();
     const handleLogout = () => navigate(ROUTES.LOGIN, { replace: true });
     window.addEventListener('auth:logout', handleLogout);
     return () => window.removeEventListener('auth:logout', handleLogout);
@@ -212,6 +225,16 @@ function App() {
         element={
           <ProtectedRoute>
             <SpecialistMobilePortal />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.USER_GUIDE}
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SystemUserGuidePage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />

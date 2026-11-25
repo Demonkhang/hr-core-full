@@ -3,11 +3,16 @@ import { STORAGE_KEYS } from '@/utils/constants';
 let inMemoryAccessToken: string | null = null;
 
 export function getAccessToken(): string | null {
-  return inMemoryAccessToken;
+  return inMemoryAccessToken || localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
 }
 
 export function setAccessToken(token: string | null) {
   inMemoryAccessToken = token;
+  if (token) {
+    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+  }
 }
 
 export function getRefreshToken(): string | null {

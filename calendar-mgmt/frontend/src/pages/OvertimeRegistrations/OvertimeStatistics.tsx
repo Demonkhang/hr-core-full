@@ -397,7 +397,7 @@ export function OvertimeStatistics() {
               placeholder="Tìm tên hoặc mã nhân viên..."
               prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e: any) => setSearchText(e.target.value)}
               style={{ width: 220 }}
             />
           )}
@@ -408,8 +408,8 @@ export function OvertimeStatistics() {
         </Space>
       </div>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <div>
           <Card size="small">
             <Statistic
               title="Nhân sự có phát sinh OT / Tổng"
@@ -418,8 +418,8 @@ export function OvertimeStatistics() {
               prefix={<TeamOutlined style={{ color: '#6366f1' }} />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title={`Tổng giờ OT đã duyệt (T${month})`}
@@ -429,8 +429,8 @@ export function OvertimeStatistics() {
               prefix={<ThunderboltOutlined />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title={`Tổng giờ OT tích luỹ năm ${year}`}
@@ -440,8 +440,8 @@ export function OvertimeStatistics() {
               prefix={<CheckCircleOutlined />}
             />
           </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div>
           <Card size="small">
             <Statistic
               title={`Giờ OT đang chờ duyệt (T${month})`}
@@ -451,8 +451,8 @@ export function OvertimeStatistics() {
               prefix={<ClockCircleOutlined />}
             />
           </Card>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <Table
         dataSource={filteredStats}
